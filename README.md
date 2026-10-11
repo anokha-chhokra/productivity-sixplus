@@ -16,7 +16,7 @@ It is plain HTML, CSS and JavaScript. There is no build step, no dependencies an
 - Search your journal (appears once you have more than 3 entries).
 - Header shows your entry count and writing streak.
 - **Reminders** card below the expense summary (see below).
-- **Expense gist card** at the top: this month's spend, change vs last month, budget progress, today's spend, and the amount left (or your top category if no budget is set). Tap it to open Expenses, or tap **+ Add** to log an expense straight away.
+- **Expense gist card** at the top: this month's spend, change vs last month, budget progress, today's spend, and the amount left (or your top category if no budget is set). When you have income or several accounts it also shows your **net balance** and this month's income. Tap it to open Expenses, or tap **+ Add** to log a transaction straight away.
 - The settings button (top right) opens currency, budget and backup options.
 
 ### Home: reminders
@@ -32,10 +32,13 @@ It is plain HTML, CSS and JavaScript. There is no build step, no dependencies an
 - **Stats** view: total commits, longest streak, 30-day completion rate, an overall 17-week heatmap, and a heatmap plus current/best streak and rate for each commitment.
 
 ### Expenses
-- Month switcher with total spent, budget progress bar and remaining (or over-budget) amount.
-- Breakdown across 8 categories: Food, Travel, Shopping, Bills, Health, Fun, Home, Other.
-- Transactions grouped by day with a daily total. Tap one to edit or delete it.
-- Each expense has an amount, category, optional note and date.
+- **Income and expenses.** The **+** button opens a sheet with an Expense / Income switch. Each transaction has an amount, an **account**, a category, an optional note and a date.
+- **Accounts.** The app starts with Cash and Bank. Add more (savings, card, wallet...), choose an icon and colour, and set a starting balance (negative for a card you owe on). Tap an account to edit it. Deleting an account moves its transactions to your first remaining account.
+- **Net balance** at the top is the sum of all account balances. An account's balance is its starting balance plus income minus expenses logged to it.
+- **Month view:** switch months, filter everything below by account (or "All accounts"), and see Income, Spent and Net for the month, plus the budget bar and remaining amount when viewing all accounts.
+- Spending is broken down across 8 categories (Food, Travel, Shopping, Bills, Health, Fun, Home, Other). Income has its own 8 (Salary, Freelance, Business, Gift, Interest, Refund, Sale, Other).
+- Transactions are grouped by day with the day's net. Income shows in green. Tap a transaction to edit or delete it.
+- Transactions you logged before accounts existed are moved into your first account automatically. Set its starting balance to correct the total.
 
 ## Running it
 
@@ -101,7 +104,8 @@ Settings:
 {
   "habits":   [{ "id": "", "name": "", "days": [0,1,2,3,4,5,6], "color": "#3fb950", "created": "YYYY-MM-DD", "log": { "YYYY-MM-DD": 1 } }],
   "journal":  [{ "id": "", "ts": 0, "date": "YYYY-MM-DD", "mood": 0, "text": "" }],
-  "expenses": [{ "id": "", "ts": 0, "date": "YYYY-MM-DD", "amount": 0, "cat": "food", "note": "" }],
+  "accounts": [{ "id": "", "name": "Cash", "icon": "💵", "color": "#3fb950", "opening": 0 }],
+  "expenses": [{ "id": "", "ts": 0, "date": "YYYY-MM-DD", "amount": 0, "type": "expense|income", "acct": "account id", "cat": "food", "note": "" }],
   "reminders": [{ "id": "", "title": "", "date": "YYYY-MM-DD", "time": "HH:MM or empty", "repeat": "none|daily|weekly|monthly", "anchor": 1, "done": false, "alerted": "" }],
   "settings": { "currency": "$", "budget": 0, "theme": "dark" }
 }
@@ -122,4 +126,4 @@ It also works in current desktop and mobile browsers. For a phone-sized view on 
 
 ## Ideas for later
 
-Recurring expenses, income and balance tracking, per-commitment detail pages, and an "auto" theme that follows the system setting.
+Transfers between accounts, recurring transactions, per-commitment detail pages, and an "auto" theme that follows the system setting.

@@ -417,4 +417,30 @@ svg.heat text { fill: var(--muted); font-size: 11px; font-family: -apple-system,
 .t-btns { -webkit-flex: 0 0 auto; flex: 0 0 auto; display: -webkit-flex; display: flex; margin-left: 8px; }
 .t-btn { height: 40px; min-width: 40px; padding: 0 10px; margin-left: 6px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); font-size: 14px; font-weight: 600; }
 .t-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+/* accounts, income */
+.am.pos { color: var(--good); }
+.g-bal { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+.tiles.money { margin: 12px -4px 12px; }
+.tiles.money .tile { padding: 12px 8px; min-width: 0; }
+.tiles.money .tile b { font-size: 19px; white-space: nowrap; }
+.arow { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; width: 100%; text-align: left; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.arow:active { opacity: .7; }
+.arow .bubble { width: 38px; height: 38px; line-height: 38px; font-size: 19px; }
+.arow .nm { -webkit-flex: 1 1 auto; flex: 1 1 auto; min-width: 0; }
+.arow .nm b { display: block; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arow .am { -webkit-flex: 0 0 auto; flex: 0 0 auto; padding-left: 8px; font-size: 16px; font-weight: 600; }
+.monthbar { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; -webkit-justify-content: space-between; justify-content: space-between; }
+.monthbar b { font-size: 17px; }
+.monthbar .navbtn { width: 44px; height: 44px; font-size: 30px; line-height: 38px; padding: 0; }
+.fstrip { display: -webkit-flex; display: flex; overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 4px -16px 4px; padding: 2px 16px 6px; }
+.fstrip::-webkit-scrollbar { display: none; }
+.fchip { -webkit-flex: 0 0 auto; flex: 0 0 auto; height: 36px; padding: 0 14px; margin-right: 8px; border-radius: 18px; border: 1px solid var(--line); background: var(--card); font-size: 14px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.fchip.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+.achips { display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; margin-right: -8px; }
+.achip { height: 44px; padding: 0 14px; margin: 0 8px 8px 0; border-radius: 12px; border: 2px solid transparent; background: var(--bg); font-size: 15px; font-weight: 600; }
+.achip.on { border-color: var(--accent); }
+.icons { display: -webkit-flex; display: flex; }
+.icons button { -webkit-flex: 1 1 0; flex: 1 1 0; height: 48px; font-size: 24px; margin-right: 6px; border-radius: 12px; border: 2px solid transparent; background: var(--bg); }
+.icons button:last-child { margin-right: 0; }
+.icons button.on { border-color: var(--accent); }
 .sheet .note { font-size: 13px; color: var(--muted); margin: 6px 0 0; line-height: 1.4; }

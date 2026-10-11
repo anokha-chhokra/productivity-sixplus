@@ -24,11 +24,28 @@
     { id: 'home', name: 'Home', icon: '🏠', color: '#39c5cf' },
     { id: 'other', name: 'Other', icon: '📦', color: '#8b949e' }
   ];
+  var INCOME_CATS = [
+    { id: 'salary', name: 'Salary', icon: '💼', color: '#3fb950' },
+    { id: 'freelance', name: 'Freelance', icon: '💻', color: '#58a6ff' },
+    { id: 'business', name: 'Business', icon: '🏪', color: '#d29922' },
+    { id: 'gift', name: 'Gift', icon: '🎁', color: '#f778ba' },
+    { id: 'interest', name: 'Interest', icon: '📈', color: '#39c5cf' },
+    { id: 'refund', name: 'Refund', icon: '🔄', color: '#bc8cff' },
+    { id: 'sale', name: 'Sale', icon: '🏷', color: '#f0883e' },
+    { id: 'other-in', name: 'Other', icon: '💰', color: '#8b949e' }
+  ];
+  var ACCT_ICONS = ['💵', '🏦', '💳', '👛', '📱', '🐷'];
 
   var state = blankState();
-  var ui = { tab: 'home', sub: 'today', date: todayKey(), month: monthOf(todayKey()), edit: null, stripLeft: null, q: '', allRem: false, showDone: false, toast: null, remSig: '' };
+  var ui = { tab: 'home', sub: 'today', date: todayKey(), month: monthOf(todayKey()), edit: null, stripLeft: null, q: '', allRem: false, showDone: false, toast: null, remSig: '', acct: 'all', lastAcct: null };
 
-  function blankState() { return { habits: [], journal: [], expenses: [], reminders: [], settings: { currency: '$', budget: 0, theme: 'dark' } }; }
+  function defaultAccounts() {
+    return [
+      { id: 'a-cash', name: 'Cash', icon: ACCT_ICONS[0], color: COLORS[0], opening: 0 },
+      { id: 'a-bank', name: 'Bank', icon: ACCT_ICONS[1], color: COLORS[1], opening: 0 }
+    ];
+  }
+  function blankState() { return { habits: [], journal: [], expenses: [], reminders: [], accounts: defaultAccounts(), settings: { currency: '$', budget: 0, theme: 'dark' } }; }
 
   /* ---------- dates (local YYYY-MM-DD) ---------- */
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
@@ -62,6 +79,14 @@
     if (data && data.journal instanceof Array) { s.journal = data.journal; }
     if (data && data.expenses instanceof Array) { s.expenses = data.expenses; }
     if (data && data.reminders instanceof Array) { s.reminders = data.reminders; }
+    if (data && data.accounts instanceof Array && data.accounts.length) { s.accounts = data.accounts; }
+    // older data has no account or type on its transactions: they were all expenses, so put them in the first account
+    var k, t;
+    for (k = 0; k < s.expenses.length; k++) {
+      t = s.expenses[k];
+      if (t.type !== 'income') { t.type = 'expense'; }
+      if (!byId(s.accounts, t.acct)) { t.acct = s.accounts[0].id; }
+    }
     if (data && data.settings) {
       if (typeof data.settings.currency === 'string') { s.settings.currency = data.settings.currency; }
       if (typeof data.settings.budget === 'number') { s.settings.budget = data.settings.budget; }
@@ -289,30 +314,60 @@
   }
 
   /* ======================================================
-     EXPENSES
+     MONEY: accounts, income and expenses
+     (state.expenses holds every transaction; type is 'expense' or 'income')
      ====================================================== */
-  function monthTotal(ym) {
-    var t = 0, i, e;
+  function acctOf(id) { return byId(state.accounts, id) || state.accounts[0]; }
+  function incCat(id) { return byId(INCOME_CATS, id) || INCOME_CATS[INCOME_CATS.length - 1]; }
+
+  // sum of transactions of one type, optionally limited to a month, an account and/or a single day
+  function sumBy(type, ym, acct, date) {
+    var s = 0, i, t;
     for (i = 0; i < state.expenses.length; i++) {
-      e = state.expenses[i];
-      if (monthOf(e.date) === ym) { t += e.amount; }
+      t = state.expenses[i];
+      if ((t.type || 'expense') !== type) { continue; }
+      if (ym && monthOf(t.date) !== ym) { continue; }
+      if (acct && acct !== 'all' && t.acct !== acct) { continue; }
+      if (date && t.date !== date) { continue; }
+      s += t.amount;
     }
-    return t;
+    return s;
   }
-  function dayTotal(k) {
-    var t = 0, i;
-    for (i = 0; i < state.expenses.length; i++) { if (state.expenses[i].date === k) { t += state.expenses[i].amount; } }
-    return t;
+  function monthTotal(ym, acct) { return sumBy('expense', ym, acct); }
+  function monthIncome(ym, acct) { return sumBy('income', ym, acct); }
+  function dayTotal(k, acct) { return sumBy('expense', null, acct, k); }
+  function dayNet(k, acct) { return sumBy('income', null, acct, k) - sumBy('expense', null, acct, k); }
+  function acctBalance(a) {
+    var b = a.opening || 0, i, t;
+    for (i = 0; i < state.expenses.length; i++) {
+      t = state.expenses[i];
+      if (t.acct === a.id) { b += (t.type === 'income') ? t.amount : -t.amount; }
+    }
+    return Math.round(b * 100) / 100;
   }
-  function byCategory(ym) {
+  function netBalance() {
+    var n = 0, i;
+    for (i = 0; i < state.accounts.length; i++) { n += acctBalance(state.accounts[i]); }
+    return Math.round(n * 100) / 100;
+  }
+  function byCategory(ym, acct) {
     var sums = {}, out = [], i, e, id;
     for (i = 0; i < state.expenses.length; i++) {
       e = state.expenses[i];
-      if (monthOf(e.date) === ym) { sums[e.cat] = (sums[e.cat] || 0) + e.amount; }
+      if ((e.type || 'expense') !== 'expense' || monthOf(e.date) !== ym) { continue; }
+      if (acct && acct !== 'all' && e.acct !== acct) { continue; }
+      sums[e.cat] = (sums[e.cat] || 0) + e.amount;
     }
     for (id in sums) { if (sums.hasOwnProperty(id)) { out.push({ cat: cat(id), sum: sums[id] }); } }
     out.sort(function (a, b) { return b.sum - a.sum; });
     return out;
+  }
+  function signed(n) { return (n > 0 ? '+' : '') + fmt(n); }
+  function fmtShort(n) {
+    var a = Math.abs(n), sign = n < 0 ? '-' : '', c = state.settings.currency;
+    if (a >= 1e6) { return sign + c + (a / 1e6).toFixed(1).replace(/\.0$/, '') + 'M'; }
+    if (a >= 1e4) { return sign + c + (a / 1e3).toFixed(1).replace(/\.0$/, '') + 'K'; }
+    return fmt(n);
   }
   function budgetBar(total) {
     var b = state.settings.budget, pct = Math.min(100, Math.round(total * 100 / b));
@@ -320,50 +375,77 @@
   }
 
   function viewSpend() {
-    var ym = ui.month, now = monthOf(todayKey()), p = ym.split('-'), i, html = '';
-    var total = monthTotal(ym), bud = state.settings.budget;
-    html += '<div class="top"><div><div class="eyebrow">Expenses</div><h1>' + MONTHS_LONG[+p[1] - 1] + ' ' + p[0] + '</h1></div>' +
-      '<button class="add-btn" data-act="x-add" aria-label="Add expense">+</button></div>';
-    html += '<div class="monthnav"><button class="navbtn" data-act="month" data-d="-1">‹ Previous</button>' +
-      '<button class="navbtn' + (ym >= now ? ' dis' : '') + '" data-act="month" data-d="1">Next ›</button></div>';
+    var ym = ui.month, now = monthOf(todayKey()), p = ym.split('-'), i, html = '', accts = state.accounts, bud = state.settings.budget;
+    if (ui.acct !== 'all' && !byId(accts, ui.acct)) { ui.acct = 'all'; }
+    var f = ui.acct, net = netBalance();
 
-    html += '<div class="panel" style="margin-top:8px"><div class="big">' + fmt(total) + '</div><div class="muted">spent this month</div>';
-    if (bud > 0) {
-      html += budgetBar(total) + '<div class="g-row"><span>Budget <b>' + fmt(bud) + '</b></span><span>' +
-        (total > bud ? '<b style="color:var(--bad)">' + fmt(total - bud) + ' over</b>' : '<b>' + fmt(bud - total) + '</b> left') + '</span></div>';
-    } else {
-      html += '<button class="link" style="margin-top:6px;padding:0" data-act="settings">Set a monthly budget</button>';
+    html += '<div class="top"><div><div class="eyebrow">Money</div><h1>Expenses</h1></div>' +
+      '<button class="add-btn" data-act="x-add" aria-label="Add transaction">+</button></div>';
+
+    // net balance + accounts (all time)
+    html += '<div class="panel" style="margin-top:16px"><div class="muted">Net balance</div><div class="big"' + (net < 0 ? ' style="color:var(--bad)"' : '') + '>' + fmt(net) + '</div>' +
+      '<div class="muted">across ' + accts.length + ' account' + (accts.length > 1 ? 's' : '') + '</div></div>';
+    html += '<h2 class="sec" style="margin-top:20px">Accounts</h2><div class="panel" style="padding-top:4px;padding-bottom:4px">';
+    for (i = 0; i < accts.length; i++) {
+      var bal = acctBalance(accts[i]);
+      html += '<button class="arow" data-act="a-edit" data-id="' + accts[i].id + '"><span class="bubble" style="background:' + rgba(accts[i].color, 0.2) + '">' + accts[i].icon +
+        '</span><span class="nm"><b>' + esc(accts[i].name) + '</b></span><span class="am"' + (bal < 0 ? ' style="color:var(--bad)"' : '') + '>' + fmt(bal) + '</span></button>';
+    }
+    html += '<button class="link" style="padding:0;height:44px" data-act="a-add">+ Add account</button></div>';
+
+    // month navigation + account filter
+    html += '<h2 class="sec" style="margin-top:22px">Month</h2><div class="monthbar"><button class="navbtn" data-act="month" data-d="-1" aria-label="Previous month">‹</button>' +
+      '<b>' + MONTHS_LONG[+p[1] - 1] + ' ' + p[0] + '</b>' +
+      '<button class="navbtn' + (ym >= now ? ' dis' : '') + '" data-act="month" data-d="1" aria-label="Next month">›</button></div>';
+    html += '<div class="fstrip"><button class="fchip' + (f === 'all' ? ' on' : '') + '" data-act="x-filter" data-acct="all">All accounts</button>';
+    for (i = 0; i < accts.length; i++) {
+      html += '<button class="fchip' + (f === accts[i].id ? ' on' : '') + '" data-act="x-filter" data-acct="' + accts[i].id + '">' + accts[i].icon + ' ' + esc(accts[i].name) + '</button>';
     }
     html += '</div>';
 
-    var cats = byCategory(ym);
+    var inc = monthIncome(ym, f), spent = monthTotal(ym, f), netm = Math.round((inc - spent) * 100) / 100;
+    html += '<div class="tiles money"><div class="tile"><b style="color:var(--good)">' + (inc ? '+' : '') + fmtShort(inc) + '</b><span>Income</span></div>' +
+      '<div class="tile"><b>' + fmtShort(spent) + '</b><span>Spent</span></div>' +
+      '<div class="tile"><b style="color:' + (netm < 0 ? 'var(--bad)' : netm > 0 ? 'var(--good)' : 'var(--text)') + '">' + (netm > 0 ? '+' : '') + fmtShort(netm) + '</b><span>Net</span></div></div>';
+
+    if (bud > 0 && f === 'all') {
+      html += '<div class="panel">' + budgetBar(spent) + '<div class="g-row"><span>Budget <b>' + fmt(bud) + '</b></span><span>' +
+        (spent > bud ? '<b style="color:var(--bad)">' + fmt(spent - bud) + ' over</b>' : '<b>' + fmt(bud - spent) + '</b> left') + '</span></div></div>';
+    } else if (!bud) {
+      html += '<button class="link" style="padding:0;margin:2px 0 6px" data-act="settings">Set a monthly budget</button>';
+    }
+
+    var cats = byCategory(ym, f);
     if (cats.length) {
-      html += '<h2 class="sec">By category</h2><div class="panel">';
+      html += '<h2 class="sec">Spending by category</h2><div class="panel">';
       for (i = 0; i < cats.length; i++) {
         html += '<div class="cat"><div class="r"><span>' + cats[i].cat.icon + ' ' + cats[i].cat.name + '</span><span>' + fmt(cats[i].sum) +
-          '</span></div><div class="cbar"><i style="width:' + Math.max(3, Math.round(cats[i].sum * 100 / total)) + '%;background:' + cats[i].cat.color + '"></i></div></div>';
+          '</span></div><div class="cbar"><i style="width:' + Math.max(3, Math.round(cats[i].sum * 100 / spent)) + '%;background:' + cats[i].cat.color + '"></i></div></div>';
       }
       html += '</div>';
     }
 
     var list = [], e;
-    for (i = 0; i < state.expenses.length; i++) { if (monthOf(state.expenses[i].date) === ym) { list.push(state.expenses[i]); } }
+    for (i = 0; i < state.expenses.length; i++) {
+      e = state.expenses[i];
+      if (monthOf(e.date) === ym && (f === 'all' || e.acct === f)) { list.push(e); }
+    }
     list.sort(function (a, b) { return a.date === b.date ? b.ts - a.ts : (a.date < b.date ? 1 : -1); });
     if (!list.length) {
-      html += '<div class="empty"><h2>No expenses yet</h2><p>Tap + to log what you spend. Your month at a glance shows up on the Home tab.</p></div>';
-      return html;
+      return html + '<div class="empty"><h2>No transactions this month</h2><p>Tap + to log income or spending. Your balance shows up on the Home tab.</p></div>';
     }
     html += '<h2 class="sec">Transactions</h2>';
     var last = '';
     for (i = 0; i < list.length; i++) {
       e = list[i];
       if (e.date !== last) {
-        html += '<div class="dayhead" style="margin-top:' + (last ? 16 : 0) + 'px"><span>' + dateHead(e.date) + '</span><span>' + fmt(dayTotal(e.date)) + '</span></div>';
+        html += '<div class="dayhead" style="margin-top:' + (last ? 16 : 0) + 'px"><span>' + dateHead(e.date) + '</span><span>' + signed(dayNet(e.date, f)) + '</span></div>';
         last = e.date;
       }
-      var c = cat(e.cat);
+      var isInc = e.type === 'income', c = isInc ? incCat(e.cat) : cat(e.cat), a = acctOf(e.acct);
       html += '<button class="xrow" data-act="x-edit" data-id="' + e.id + '"><span class="bubble" style="background:' + rgba(c.color, 0.18) + '">' + c.icon +
-        '</span><span class="nm"><b>' + esc(e.note || c.name) + '</b>' + (e.note ? '<span>' + c.name + '</span>' : '') + '</span><span class="am">' + fmt(e.amount) + '</span></button>';
+        '</span><span class="nm"><b>' + esc(e.note || c.name) + '</b><span>' + (e.note ? c.name + ' · ' : '') + esc(a.name) + '</span></span>' +
+        '<span class="am' + (isInc ? ' pos' : '') + '">' + (isInc ? '+' : '') + fmt(e.amount) + '</span></button>';
     }
     return html;
   }
@@ -512,11 +594,12 @@
 
   function gistCard() {
     var t = todayKey(), ym = monthOf(t), total = monthTotal(ym), bud = state.settings.budget, prev = monthTotal(shiftMonth(ym, -1));
-    var name = MONTHS_LONG[+ym.split('-')[1] - 1];
+    var name = MONTHS_LONG[+ym.split('-')[1] - 1], inc = monthIncome(ym), i, hasMoney = false;
+    for (i = 0; i < state.accounts.length; i++) { if (state.accounts[i].opening) { hasMoney = true; } }
     var html = '<button class="gist" data-act="tab" data-tab="spend"><div class="g-top"><span class="eyebrow">Spent in ' + name + '</span>' +
       '<span class="g-quick" data-act="x-add">+ Add</span></div>';
-    if (!state.expenses.length && !bud) {
-      return html + '<div class="g-amt">' + fmt(0) + '</div><div class="g-sub">Tap to start tracking your spending</div></button>';
+    if (!state.expenses.length && !bud && !hasMoney) {
+      return html + '<div class="g-amt">' + fmt(0) + '</div><div class="g-sub">Tap to start tracking your money</div></button>';
     }
     html += '<div class="g-amt">' + fmt(total) + '</div>';
     if (prev > 0) {
@@ -529,7 +612,13 @@
     var top = byCategory(ym)[0], right;
     if (bud > 0) { right = total > bud ? '<b style="color:var(--bad)">' + fmt(total - bud) + ' over</b>' : '<b>' + fmt(bud - total) + '</b> left'; }
     else { right = top ? top.cat.icon + ' <b>' + top.cat.name + '</b>' : ''; }
-    return html + '<div class="g-row"><span>Today <b>' + fmt(dayTotal(t)) + '</b></span><span>' + right + '</span></div></button>';
+    html += '<div class="g-row"><span>Today <b>' + fmt(dayTotal(t)) + '</b></span><span>' + right + '</span></div>';
+    var net = netBalance();
+    if (inc || hasMoney || state.accounts.length > 1) {
+      html += '<div class="g-row g-bal"><span>Net balance <b' + (net < 0 ? ' style="color:var(--bad)"' : '') + '>' + fmt(net) + '</b></span>' +
+        (inc ? '<span>Income <b style="color:var(--good)">+' + fmtShort(inc) + '</b></span>' : '') + '</div>';
+    }
+    return html + '</button>';
   }
 
   function viewHome() {
@@ -585,20 +674,66 @@
     if (!j) { el('j-text').focus(); }
   }
 
-  function openExpense(id) {
-    var x = id ? byId(state.expenses, id) : null, i, html;
-    ui.edit = { type: 'expense', id: id || null, cat: x ? x.cat : 'food' };
-    html = '<div class="scrim" data-act="close"></div><div class="sheet full">' + head(x ? 'Edit expense' : 'New expense', 'x-save') +
-      '<label>Amount (' + esc(state.settings.currency) + ')</label><input class="amt" type="number" step="any" min="0" inputmode="decimal" id="x-amt" placeholder="0" value="' + (x ? x.amount : '') + '">' +
-      '<label>Category</label><div class="catgrid">';
-    for (i = 0; i < CATS.length; i++) {
-      html += '<button class="catbtn' + (CATS[i].id === ui.edit.cat ? ' on' : '') + '" data-act="x-cat" data-cat="' + CATS[i].id + '">' + CATS[i].icon + '<span>' + CATS[i].name + '</span></button>';
+  function catGrid(kind, sel) {
+    var list = kind === 'income' ? INCOME_CATS : CATS, i, h = '';
+    for (i = 0; i < list.length; i++) {
+      h += '<button class="catbtn' + (list[i].id === sel ? ' on' : '') + '" data-act="x-cat" data-cat="' + list[i].id + '">' + list[i].icon + '<span>' + list[i].name + '</span></button>';
     }
-    html += '</div><label>Note</label><input type="text" id="x-note" maxlength="60" placeholder="Optional" value="' + esc(x ? x.note : '') + '" autocapitalize="sentences" autocorrect="off">' +
+    return h;
+  }
+
+  function openTx(id) {
+    var x = id ? byId(state.expenses, id) : null, i, html;
+    var kind = x ? (x.type || 'expense') : 'expense';
+    var acct = x ? x.acct : (byId(state.accounts, ui.lastAcct) ? ui.lastAcct : (byId(state.accounts, ui.acct) ? ui.acct : state.accounts[0].id));
+    ui.edit = { type: 'tx', id: id || null, kind: kind, cat: x ? x.cat : 'food', acct: acct };
+    html = '<div class="scrim" data-act="close"></div><div class="sheet full">' + head(x ? 'Edit transaction' : 'New transaction', 'x-save') +
+      '<div class="seg" style="margin:6px 0 0"><button data-act="x-type" data-kind="expense" class="' + (kind === 'expense' ? 'on' : '') + '">Expense</button>' +
+      '<button data-act="x-type" data-kind="income" class="' + (kind === 'income' ? 'on' : '') + '">Income</button></div>' +
+      '<label>Amount (' + esc(state.settings.currency) + ')</label><input class="amt" type="number" step="any" min="0" inputmode="decimal" id="x-amt" placeholder="0" value="' + (x ? x.amount : '') + '">' +
+      '<label>Account</label><div class="achips">';
+    for (i = 0; i < state.accounts.length; i++) {
+      html += '<button class="achip' + (state.accounts[i].id === acct ? ' on' : '') + '" data-act="x-acct" data-acct="' + state.accounts[i].id + '">' + state.accounts[i].icon + ' ' + esc(state.accounts[i].name) + '</button>';
+    }
+    html += '</div><label>Category</label><div class="catgrid" id="x-cats">' + catGrid(kind, ui.edit.cat) + '</div>' +
+      '<label>Note</label><input type="text" id="x-note" maxlength="60" placeholder="Optional" value="' + esc(x ? x.note : '') + '" autocapitalize="sentences" autocorrect="off">' +
       '<label>Date</label><input type="date" id="x-date" value="' + (x ? x.date : todayKey()) + '">' +
-      (x ? '<div class="btnrow" style="margin-top:20px"><button class="btn danger" data-act="x-delete">Delete expense</button></div>' : '') + '</div>';
+      (x ? '<div class="btnrow" style="margin-top:20px"><button class="btn danger" data-act="x-delete">Delete transaction</button></div>' : '') + '</div>';
     showSheet(html);
     if (!x) { el('x-amt').focus(); }
+  }
+
+  function openAccount(id) {
+    var a = id ? byId(state.accounts, id) : null, i, html;
+    ui.edit = { type: 'account', id: id || null, icon: a ? a.icon : ACCT_ICONS[0], color: a ? a.color : COLORS[state.accounts.length % COLORS.length] };
+    html = '<div class="scrim" data-act="close"></div><div class="sheet full">' + head(a ? 'Edit account' : 'New account', 'a-save') +
+      '<label>Name</label><input type="text" id="a-name" maxlength="24" value="' + esc(a ? a.name : '') + '" placeholder="e.g. Savings" autocapitalize="words" autocorrect="off">' +
+      '<label>Icon</label><div class="icons">';
+    for (i = 0; i < ACCT_ICONS.length; i++) {
+      html += '<button class="' + (ACCT_ICONS[i] === ui.edit.icon ? 'on' : '') + '" data-act="a-icon" data-icon="' + ACCT_ICONS[i] + '">' + ACCT_ICONS[i] + '</button>';
+    }
+    html += '</div><label>Starting balance (' + esc(state.settings.currency) + ')</label><input type="number" step="any" inputmode="decimal" id="a-open" placeholder="0" value="' + (a && a.opening ? a.opening : '') + '">' +
+      '<p class="note">The balance is this starting amount plus income minus expenses you log to the account. Use a negative number for a card you owe on.</p>' +
+      '<label>Colour</label><div class="swatches">';
+    for (i = 0; i < COLORS.length; i++) {
+      html += '<button class="sw' + (COLORS[i] === ui.edit.color ? ' on' : '') + '" style="background:' + COLORS[i] + '" data-act="a-color" data-color="' + COLORS[i] + '"></button>';
+    }
+    html += '</div>' + (a && state.accounts.length > 1 ? '<div class="btnrow" style="margin-top:20px"><button class="btn danger" data-act="a-delete">Delete account</button></div>' : '') + '</div>';
+    showSheet(html);
+    if (!a) { el('a-name').focus(); }
+  }
+
+  function saveAccount(e) {
+    var name = el('a-name').value.replace(/^\s+|\s+$/g, '');
+    if (!name) { el('a-name').focus(); return false; }
+    var opening = parseFloat(el('a-open').value);
+    if (isNaN(opening)) { opening = 0; }
+    opening = Math.round(opening * 100) / 100;
+    var a = e.id ? byId(state.accounts, e.id) : null;
+    if (a) { a.name = name; a.icon = e.icon; a.color = e.color; a.opening = opening; }
+    else { state.accounts.push({ id: newId('a'), name: name, icon: e.icon, color: e.color, opening: opening }); }
+    save();
+    return true;
   }
 
   function openReminder(id) {
@@ -768,9 +903,20 @@
       }
       break;
 
-    /* expenses */
-    case 'x-add': openExpense(null); break;
-    case 'x-edit': openExpense(id); break;
+    /* transactions and accounts */
+    case 'x-add': openTx(null); break;
+    case 'x-edit': openTx(id); break;
+    case 'x-type':
+      e.kind = act.getAttribute('data-kind'); e.cat = e.kind === 'income' ? 'salary' : 'food';
+      var kb = document.querySelectorAll('.seg [data-act=x-type]');
+      for (i = 0; i < kb.length; i++) { kb[i].className = kb[i].getAttribute('data-kind') === e.kind ? 'on' : ''; }
+      el('x-cats').innerHTML = catGrid(e.kind, e.cat);
+      break;
+    case 'x-acct':
+      e.acct = act.getAttribute('data-acct');
+      var ab = document.querySelectorAll('.achip');
+      for (i = 0; i < ab.length; i++) { ab[i].className = 'achip' + (ab[i].getAttribute('data-acct') === e.acct ? ' on' : ''); }
+      break;
     case 'x-cat':
       e.cat = act.getAttribute('data-cat');
       var cb = document.querySelectorAll('.catbtn');
@@ -780,14 +926,40 @@
       var amt = Math.round(num('x-amt') * 100) / 100;
       if (amt <= 0) { el('x-amt').focus(); break; }
       var note = el('x-note').value.replace(/^\s+|\s+$/g, ''), date = el('x-date').value || todayKey();
-      if (e.id) { x = byId(state.expenses, e.id); x.amount = amt; x.cat = e.cat; x.note = note; x.date = date; }
-      else { state.expenses.push({ id: newId('x'), ts: Date.now(), date: date, amount: amt, cat: e.cat, note: note }); }
+      if (e.id) { x = byId(state.expenses, e.id); x.amount = amt; x.cat = e.cat; x.note = note; x.date = date; x.type = e.kind; x.acct = e.acct; }
+      else { state.expenses.push({ id: newId('x'), ts: Date.now(), date: date, amount: amt, cat: e.cat, note: note, type: e.kind, acct: e.acct }); }
+      ui.lastAcct = e.acct;
       if (monthOf(date) !== ui.month && ui.tab === 'spend') { ui.month = monthOf(date); }
       save(); closeSheet(); render();
       break;
     case 'x-delete':
-      if (window.confirm('Delete this expense?')) {
+      if (window.confirm('Delete this transaction?')) {
         state.expenses = state.expenses.filter(function (z) { return z.id !== e.id; });
+        save(); closeSheet(); render();
+      }
+      break;
+    case 'x-filter': ui.acct = act.getAttribute('data-acct'); render(); break;
+    case 'a-add': openAccount(null); break;
+    case 'a-edit': openAccount(id); break;
+    case 'a-icon':
+      e.icon = act.getAttribute('data-icon');
+      var ib = document.querySelectorAll('.icons button');
+      for (i = 0; i < ib.length; i++) { ib[i].className = ib[i].getAttribute('data-icon') === e.icon ? 'on' : ''; }
+      break;
+    case 'a-color':
+      e.color = act.getAttribute('data-color');
+      var cs = document.querySelectorAll('.sw');
+      for (i = 0; i < cs.length; i++) { cs[i].className = 'sw' + (cs[i].getAttribute('data-color') === e.color ? ' on' : ''); }
+      break;
+    case 'a-save': if (saveAccount(e)) { closeSheet(); render(); } break;
+    case 'a-delete':
+      var gone = byId(state.accounts, e.id), rest = state.accounts.filter(function (z) { return z.id !== e.id; });
+      var n = state.expenses.filter(function (z) { return z.acct === e.id; }).length;
+      if (gone && rest.length && window.confirm('Delete "' + gone.name + '"?' + (n ? ' Its ' + n + ' transaction' + (n > 1 ? 's' : '') + ' will move to "' + rest[0].name + '".' : ''))) {
+        for (i = 0; i < state.expenses.length; i++) { if (state.expenses[i].acct === e.id) { state.expenses[i].acct = rest[0].id; } }
+        state.accounts = rest;
+        if (ui.acct === e.id) { ui.acct = 'all'; }
+        if (ui.lastAcct === e.id) { ui.lastAcct = null; }
         save(); closeSheet(); render();
       }
       break;
