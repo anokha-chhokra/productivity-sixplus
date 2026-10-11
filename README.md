@@ -63,6 +63,7 @@ Everything is stored in the browser's `localStorage` under the key `commit.v1`. 
 
 Settings:
 - **Currency symbol:** up to 3 characters (default `$`).
+- **Theme:** Dark (default) or Light. It applies instantly, is remembered, and is included in backups.
 - **Monthly budget:** `0` means no budget.
 
 ## Project layout
@@ -70,7 +71,7 @@ Settings:
 | File | Purpose |
 | --- | --- |
 | `index.html` | Page shell and bottom tab bar |
-| `style.css` | All styling (dark theme, CSS variables) |
+| `style.css` | All styling (colours are CSS variables; the light theme overrides them under `:root[data-theme="light"]`) |
 | `app.js` | All logic: storage, views, events (ES5, one IIFE) |
 
 ### Data shape
@@ -80,7 +81,7 @@ Settings:
   "habits":   [{ "id": "", "name": "", "days": [0,1,2,3,4,5,6], "color": "#3fb950", "created": "YYYY-MM-DD", "log": { "YYYY-MM-DD": 1 } }],
   "journal":  [{ "id": "", "ts": 0, "date": "YYYY-MM-DD", "mood": 0, "text": "" }],
   "expenses": [{ "id": "", "ts": 0, "date": "YYYY-MM-DD", "amount": 0, "cat": "food", "note": "" }],
-  "settings": { "currency": "$", "budget": 0 }
+  "settings": { "currency": "$", "budget": 0, "theme": "dark" }
 }
 ```
 
@@ -99,4 +100,4 @@ It also works in current desktop and mobile browsers. For a phone-sized view on 
 
 ## Ideas for later
 
-Reminders, recurring expenses, income and balance tracking, per-commitment detail pages, and a light theme.
+Reminders, recurring expenses, income and balance tracking, per-commitment detail pages, and an "auto" theme that follows the system setting.

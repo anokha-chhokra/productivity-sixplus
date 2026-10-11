@@ -28,7 +28,7 @@
   var state = blankState();
   var ui = { tab: 'home', sub: 'today', date: todayKey(), month: monthOf(todayKey()), edit: null, stripLeft: null, q: '' };
 
-  function blankState() { return { habits: [], journal: [], expenses: [], settings: { currency: '$', budget: 0 } }; }
+  function blankState() { return { habits: [], journal: [], expenses: [], settings: { currency: '$', budget: 0, theme: 'dark' } }; }
 
   /* ---------- dates (local YYYY-MM-DD) ---------- */
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
@@ -64,6 +64,7 @@
     if (data && data.settings) {
       if (typeof data.settings.currency === 'string') { s.settings.currency = data.settings.currency; }
       if (typeof data.settings.budget === 'number') { s.settings.budget = data.settings.budget; }
+      if (data.settings.theme === 'light' || data.settings.theme === 'dark') { s.settings.theme = data.settings.theme; }
     }
     return s;
   }
@@ -328,7 +329,7 @@
     html += '<div class="panel" style="margin-top:8px"><div class="big">' + fmt(total) + '</div><div class="muted">spent this month</div>';
     if (bud > 0) {
       html += budgetBar(total) + '<div class="g-row"><span>Budget <b>' + fmt(bud) + '</b></span><span>' +
-        (total > bud ? '<b style="color:#ff7b72">' + fmt(total - bud) + ' over</b>' : '<b>' + fmt(bud - total) + '</b> left') + '</span></div>';
+        (total > bud ? '<b style="color:var(--bad)">' + fmt(total - bud) + ' over</b>' : '<b>' + fmt(bud - total) + '</b> left') + '</span></div>';
     } else {
       html += '<button class="link" style="margin-top:6px;padding:0" data-act="settings">Set a monthly budget</button>';
     }
@@ -415,7 +416,7 @@
     }
     if (bud > 0) { html += budgetBar(total); } else { html += '<div style="height:12px"></div>'; }
     var top = byCategory(ym)[0], right;
-    if (bud > 0) { right = total > bud ? '<b style="color:#ff7b72">' + fmt(total - bud) + ' over</b>' : '<b>' + fmt(bud - total) + '</b> left'; }
+    if (bud > 0) { right = total > bud ? '<b style="color:var(--bad)">' + fmt(total - bud) + ' over</b>' : '<b>' + fmt(bud - total) + '</b> left'; }
     else { right = top ? top.cat.icon + ' <b>' + top.cat.name + '</b>' : ''; }
     return html + '<div class="g-row"><span>Today <b>' + fmt(dayTotal(t)) + '</b></span><span>' + right + '</span></div></button>';
   }
@@ -493,6 +494,8 @@
     ui.edit = { type: 'settings' };
     showSheet('<div class="scrim" data-act="close"></div><div class="sheet full">' + head('Settings', 's-save') +
       '<label>Currency symbol</label><input type="text" id="s-cur" maxlength="3" value="' + esc(state.settings.currency) + '" autocapitalize="off" autocorrect="off">' +
+      '<label>Theme</label><div class="seg" style="margin-bottom:0"><button data-act="theme" data-theme="dark" class="' + (state.settings.theme === 'dark' ? 'on' : '') + '">Dark</button>' +
+      '<button data-act="theme" data-theme="light" class="' + (state.settings.theme === 'light' ? 'on' : '') + '">Light</button></div>' +
       '<label>Monthly budget (0 = none)</label><input type="number" step="any" min="0" inputmode="decimal" id="s-bud" value="' + (state.settings.budget || '') + '" placeholder="0">' +
       '<label>Backup (all data)</label><div class="btnrow"><button class="btn" data-act="export">Export</button><button class="btn" data-act="import">Import</button></div>' +
       '<textarea class="backup-box" id="backup" placeholder="Export copies your data here. Paste a backup here and tap Import to restore it." autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>' +
@@ -536,6 +539,12 @@
     case 'sub': ui.sub = act.getAttribute('data-sub'); render(); break;
     case 'close': closeSheet(); break;
     case 'settings': openSettings(); break;
+    case 'theme':
+      state.settings.theme = act.getAttribute('data-theme');
+      applyTheme(); save();
+      var tb = document.querySelectorAll('.seg [data-act=theme]');
+      for (i = 0; i < tb.length; i++) { tb[i].className = tb[i].getAttribute('data-theme') === state.settings.theme ? 'on' : ''; }
+      break;
 
     /* habits */
     case 'pick': ui.date = act.getAttribute('data-date'); render(); break;
@@ -651,6 +660,16 @@
     }
   }, false);
 
+  function applyTheme() {
+    var light = state.settings.theme === 'light', metas = document.getElementsByTagName('meta'), i, n;
+    document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
+    for (i = 0; i < metas.length; i++) {
+      n = metas[i].getAttribute('name');
+      if (n === 'theme-color') { metas[i].setAttribute('content', light ? '#f2f4f7' : '#0d1117'); }
+      if (n === 'apple-mobile-web-app-status-bar-style') { metas[i].setAttribute('content', light ? 'default' : 'black'); }
+    }
+  }
+
   function addHabit(name, days, color) {
     state.habits.push({ id: newId('h'), name: name, days: days, color: color, created: todayKey(), log: {} });
   }
@@ -671,5 +690,6 @@
   }, false);
 
   load();
+  applyTheme();
   render();
 })();
