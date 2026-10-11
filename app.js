@@ -52,7 +52,8 @@
       { id: 'a-bank', name: 'Bank', icon: ACCT_ICONS[1], color: COLORS[1], opening: 0 }
     ];
   }
-  function blankState() { return { habits: [], journal: [], expenses: [], reminders: [], accounts: defaultAccounts(), settings: { currency: '$', budget: 0, theme: 'dark' } }; }
+  // setupDone is false on a brand-new device, which is what triggers the setup screen
+  function blankState() { return { habits: [], journal: [], expenses: [], reminders: [], accounts: defaultAccounts(), settings: { currency: '$', budget: 0, theme: 'dark', setupDone: false } }; }
 
   /* ---------- dates (local YYYY-MM-DD) ---------- */
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
@@ -99,6 +100,8 @@
       if (typeof data.settings.currency === 'string') { s.settings.currency = data.settings.currency; }
       if (typeof data.settings.budget === 'number') { s.settings.budget = data.settings.budget; }
       if (data.settings.theme === 'light' || data.settings.theme === 'dark') { s.settings.theme = data.settings.theme; }
+      // data saved before the setup screen existed counts as already set up
+      s.settings.setupDone = data.settings.setupDone !== false;
     }
     return s;
   }
@@ -998,6 +1001,99 @@
   /* ======================================================
      EVENTS
      ====================================================== */
+  /* ======================================================
+     SETUP: shown on a new device (no saved data yet)
+     steps: 0 welcome, 'restore', 1 look + currency, 2 accounts, 3 budget + starter commitments
+     ====================================================== */
+  function openSetup() {
+    ui.setup = { step: 0, accounts: [{ name: 'Cash', opening: '' }, { name: 'Bank', opening: '' }], habits: [], budget: '' };
+    renderSetup();
+  }
+  function closeSetup() { ui.setup = null; el('setup-root').innerHTML = ''; }
+
+  // copy whatever is typed on the current step into ui.setup / state
+  function collectSetup() {
+    var s = ui.setup, rows, i, a;
+    if (!s) { return; }
+    if (s.step === 1 && el('s-cur')) { state.settings.currency = el('s-cur').value.replace(/^\s+|\s+$/g, ''); }
+    if (s.step === 2) {
+      rows = document.querySelectorAll('.srow'); s.accounts = [];
+      for (i = 0; i < rows.length; i++) {
+        s.accounts.push({ name: rows[i].querySelector('.sa-name').value, opening: rows[i].querySelector('.sa-open').value });
+      }
+    }
+    if (s.step === 3 && el('s-budget')) { s.budget = el('s-budget').value; }
+  }
+
+  function renderSetup() {
+    var s = ui.setup, root = el('setup-root'), i, html = '<div class="setup">', nav = '';
+    if (s.step === 0) {
+      html += '<div class="s-hero"><img src="icon-180.png" width="96" height="96" alt=""><h1>Welcome to Commit</h1>' +
+        '<p>Your journal, habits and money in one private app. Everything stays on this device.</p></div>' +
+        '<button class="btn primary big" data-act="s-next">Set up in a minute</button>' +
+        '<button class="btn big" data-act="s-restore">Restore from a backup</button>' +
+        '<button class="link dim s-skip" data-act="s-skip">Skip for now</button>';
+      if (window.navigator.standalone === false) {
+        html += '<p class="s-tip">Tip: tap Share, then Add to Home Screen, and open Commit from there. The Home Screen app keeps its own separate data, so do your setup there.</p>';
+      }
+    } else if (s.step === 'restore') {
+      html += '<p class="s-step">Restore</p><h2>Restore from a backup</h2>' +
+        '<p class="s-help">On your other device open Settings, tap Export, copy the text, and paste it below.</p>' +
+        '<textarea id="s-backup" placeholder="Paste your backup here" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>';
+      nav = '<button class="btn" data-act="s-back">Back</button><button class="btn primary" style="-webkit-flex:2;flex:2" data-act="s-import">Restore</button>';
+    } else if (s.step === 1) {
+      html += '<p class="s-step">Step 1 of 3</p><h2>Look and currency</h2><p class="s-help">You can change these any time in Settings.</p>' +
+        '<label>Theme</label><div class="seg" style="margin-bottom:0"><button data-act="theme" data-theme="dark" class="' + (state.settings.theme === 'dark' ? 'on' : '') + '">Dark</button>' +
+        '<button data-act="theme" data-theme="light" class="' + (state.settings.theme === 'light' ? 'on' : '') + '">Light</button></div>' +
+        '<label>Currency symbol</label><div class="fstrip" id="s-curs">' + currencyChips(state.settings.currency) + '</div>' +
+        '<div class="curline"><input type="text" id="s-cur" maxlength="4" value="' + esc(state.settings.currency) + '" placeholder="Custom" autocapitalize="off" autocorrect="off">' +
+        '<span class="curprev" id="s-prev">' + esc(fmt(1234.5, state.settings.currency)) + '</span></div>' +
+        '<p class="s-help" style="margin-top:6px">Only the symbol changes. Amounts are not converted.</p>';
+      nav = '<button class="btn" data-act="s-back">Back</button><button class="btn primary" style="-webkit-flex:2;flex:2" data-act="s-next">Next</button>';
+    } else if (s.step === 2) {
+      html += '<p class="s-step">Step 2 of 3</p><h2>Your accounts</h2>' +
+        '<p class="s-help">Where your money lives. Enter what each holds now, or use a negative number for a card you owe on.</p><div id="s-accts">';
+      for (i = 0; i < s.accounts.length; i++) {
+        html += '<div class="srow"><input type="text" class="sa-name" maxlength="24" value="' + esc(s.accounts[i].name) + '" placeholder="Account name" autocapitalize="words" autocorrect="off">' +
+          '<input type="number" class="sa-open" step="any" inputmode="decimal" value="' + esc(s.accounts[i].opening) + '" placeholder="Balance">' +
+          '<button class="sx" data-act="s-rm" data-i="' + i + '" aria-label="Remove account">✕</button></div>';
+      }
+      html += '</div><button class="link" style="padding:0" data-act="s-add">+ Add account</button>';
+      nav = '<button class="btn" data-act="s-back">Back</button><button class="btn primary" style="-webkit-flex:2;flex:2" data-act="s-next">Next</button>';
+    } else {
+      html += '<p class="s-step">Step 3 of 3</p><h2>Budget and habits</h2><p class="s-help">Both are optional.</p>' +
+        '<label>Monthly spending budget (' + esc(state.settings.currency) + ')</label><input type="number" id="s-budget" step="any" min="0" inputmode="decimal" placeholder="No budget" value="' + esc(s.budget) + '">' +
+        '<label>Start with a few daily commitments</label><div class="tagchips">';
+      for (i = 0; i < SUGGESTIONS.length; i++) {
+        html += '<button class="tchip' + (s.habits.indexOf(SUGGESTIONS[i]) > -1 ? ' on' : '') + '" data-act="s-habit" data-name="' + esc(SUGGESTIONS[i]) + '">' + esc(SUGGESTIONS[i]) + '</button>';
+      }
+      html += '</div>';
+      nav = '<button class="btn" data-act="s-back">Back</button><button class="btn primary" style="-webkit-flex:2;flex:2" data-act="s-finish">Finish</button>';
+    }
+    html += '</div>' + (nav ? '<div class="sfoot">' + nav + '</div>' : '');
+    root.innerHTML = html;
+    root.scrollTop = 0;
+  }
+
+  function finishSetup() {
+    var s = ui.setup, list = [], i, a, n, b;
+    collectSetup();
+    for (i = 0; i < s.accounts.length; i++) {
+      a = s.accounts[i];
+      if (a.name.replace(/^\s+|\s+$/g, '')) {
+        n = parseFloat(a.opening);
+        list.push({ id: list.length === 0 ? 'a-cash' : list.length === 1 ? 'a-bank' : newId('a'), name: a.name.replace(/^\s+|\s+$/g, ''),
+          icon: ACCT_ICONS[list.length % ACCT_ICONS.length], color: COLORS[list.length % COLORS.length], opening: isNaN(n) ? 0 : Math.round(n * 100) / 100 });
+      }
+    }
+    state.accounts = list.length ? list : defaultAccounts();
+    b = parseFloat(s.budget);
+    state.settings.budget = (isNaN(b) || b < 0) ? 0 : b;
+    for (i = 0; i < s.habits.length; i++) { addHabit(s.habits[i], [0, 1, 2, 3, 4, 5, 6], COLORS[i % COLORS.length], []); }
+    state.settings.setupDone = true;
+    save(); closeSetup(); render();
+  }
+
   function num(id) { var v = parseFloat(el(id).value); return isNaN(v) ? 0 : v; }
 
   document.addEventListener('click', function (ev) {
@@ -1199,6 +1295,39 @@
 
     /* settings */
     case 'cur': el('s-cur').value = act.getAttribute('data-cur'); refreshCurrency(); break;
+
+    /* first-run setup */
+    case 's-next':
+      collectSetup();
+      ui.setup.step = ui.setup.step === 0 ? 1 : ui.setup.step + 1;
+      renderSetup();
+      break;
+    case 's-back':
+      collectSetup();
+      ui.setup.step = ui.setup.step === 'restore' || ui.setup.step === 1 ? 0 : ui.setup.step - 1;
+      renderSetup();
+      break;
+    case 's-restore': ui.setup.step = 'restore'; renderSetup(); break;
+    case 's-skip': state.settings.setupDone = true; save(); closeSetup(); render(); break;
+    case 's-add': collectSetup(); ui.setup.accounts.push({ name: '', opening: '' }); renderSetup(); break;
+    case 's-rm':
+      collectSetup();
+      if (ui.setup.accounts.length > 1) { ui.setup.accounts.splice(+act.getAttribute('data-i'), 1); renderSetup(); }
+      break;
+    case 's-habit':
+      var hn = act.getAttribute('data-name'), hi = ui.setup.habits.indexOf(hn);
+      if (hi > -1) { ui.setup.habits.splice(hi, 1); } else { ui.setup.habits.push(hn); }
+      act.className = 'tchip' + (hi > -1 ? '' : ' on');
+      break;
+    case 's-finish': finishSetup(); break;
+    case 's-import':
+      try {
+        var bk = JSON.parse(el('s-backup').value);
+        if (!bk || !(bk.habits instanceof Array)) { throw new Error('bad'); }
+        state = migrate(bk); state.settings.setupDone = true;
+        save(); applyTheme(); closeSetup(); render();
+      } catch (err2) { window.alert('That does not look like a valid backup.'); }
+      break;
     case 's-save':
       var cur = el('s-cur').value.replace(/^\s+|\s+$/g, '');
       state.settings.currency = cur;
@@ -1262,6 +1391,7 @@
   load();
   applyTheme();
   render();
+  if (!state.settings.setupDone) { openSetup(); }
   checkDue();
   window.setInterval(tick, 30000);
 

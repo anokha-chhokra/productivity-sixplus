@@ -53,6 +53,23 @@ python -m http.server 5173
 
 Then visit `http://localhost:5173`.
 
+### First-run setup
+
+The first time the app opens on a device with no saved data, it shows a setup screen instead of an empty app:
+
+1. **Welcome:** choose **Set up in a minute**, **Restore from a backup**, or **Skip for now** (which keeps the defaults: dark theme, `$`, Cash and Bank accounts).
+2. **Look and currency:** dark or light theme, and the currency symbol (same picker as Settings).
+3. **Your accounts:** rename the default Cash and Bank accounts, add or remove accounts, and enter each starting balance (negative for a card you owe on). Rows left without a name are ignored.
+4. **Budget and habits:** an optional monthly budget and a few one-tap daily commitments to start with.
+
+**Restoring on a new device:** on your old device open Settings, tap **Export** and copy the text. On the new one, choose **Restore from a backup** on the welcome screen, paste it and tap **Restore**. Your journal, habits, expenses, reminders, accounts and settings come across, and the setup screen is skipped.
+
+Notes:
+- Setup only appears when nothing is saved. If you already had data from an earlier version, you're treated as set up and won't see it.
+- Nothing is saved until you finish (or skip), so closing the app mid-setup starts it again next time. Switching the theme is the one exception, since it applies as soon as you tap it.
+- On iPhone, Safari and the Home Screen app keep **separate** data. Each one shows setup the first time, so add Commit to your Home Screen first and do your setup there.
+- Settings keeps a flag (`setupDone`) so setup runs once per device. It travels with backups, so restored data never triggers setup again.
+
 ### Offline support
 
 The app registers a service worker (`sw.js`) that caches all of its files, so it opens with no internet connection (airplane mode, no signal). Your data was always stored locally, so everything keeps working offline.
@@ -110,7 +127,7 @@ Settings:
   "accounts": [{ "id": "", "name": "Cash", "icon": "💵", "color": "#3fb950", "opening": 0 }],
   "expenses": [{ "id": "", "ts": 0, "date": "YYYY-MM-DD", "amount": 0, "type": "expense|income", "acct": "account id", "cat": "food", "note": "" }],
   "reminders": [{ "id": "", "title": "", "date": "YYYY-MM-DD", "time": "HH:MM or empty", "repeat": "none|daily|weekly|monthly", "anchor": 1, "done": false, "alerted": "" }],
-  "settings": { "currency": "$", "budget": 0, "theme": "dark" }
+  "settings": { "currency": "$", "budget": 0, "theme": "dark", "setupDone": true }
 }
 ```
 
