@@ -637,6 +637,14 @@
     return true;
   }
 
+  function offlineStatus() {
+    if (!('serviceWorker' in navigator)) {
+      return '⚠️ Not available here. Offline mode needs the app to be served over HTTPS (a plain http:// address on your network won’t work).';
+    }
+    if (navigator.serviceWorker.controller) { return '✅ Ready. The app opens even with no internet connection.'; }
+    return '⏳ Setting up. Keep the app open while online, then reopen it once.';
+  }
+
   function openSettings() {
     ui.edit = { type: 'settings' };
     showSheet('<div class="scrim" data-act="close"></div><div class="sheet full">' + head('Settings', 's-save') +
@@ -646,7 +654,8 @@
       '<label>Monthly budget (0 = none)</label><input type="number" step="any" min="0" inputmode="decimal" id="s-bud" value="' + (state.settings.budget || '') + '" placeholder="0">' +
       '<label>Backup (all data)</label><div class="btnrow"><button class="btn" data-act="export">Export</button><button class="btn" data-act="import">Import</button></div>' +
       '<textarea class="backup-box" id="backup" placeholder="Export copies your data here. Paste a backup here and tap Import to restore it." autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>' +
-      '<p class="note">Everything is stored only on this device. Export a backup now and then.</p></div>');
+      '<p class="note">Everything is stored only on this device. Export a backup now and then.</p>' +
+      '<label>Offline mode</label><p class="note" style="margin-top:0">' + offlineStatus() + '</p></div>');
   }
 
   /* ======================================================
@@ -886,4 +895,11 @@
   render();
   checkDue();
   window.setInterval(tick, 30000);
+
+  // offline support (needs HTTPS or localhost; see sw.js)
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () { /* unsupported context: app still works online */ });
+    });
+  }
 })();

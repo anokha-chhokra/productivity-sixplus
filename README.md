@@ -47,17 +47,27 @@ python -m http.server 5173
 
 Then visit `http://localhost:5173`.
 
+### Offline support
+
+The app registers a service worker (`sw.js`) that caches all of its files, so it opens with no internet connection (airplane mode, no signal). Your data was always stored locally, so everything keeps working offline.
+
+- **It needs HTTPS** (or `localhost`). Browsers only allow service workers on secure origins, so a plain `http://192.168.x.x:8000` address on your Wi-Fi will **not** get offline support. Host the folder on any HTTPS static host (GitHub Pages, Netlify, Vercel, Cloudflare Pages...) to use it on your phone.
+- **First visit must be online.** Open the app once while connected and keep it open for a moment. Settings shows **Offline mode: Ready** when it's set up. If it says "Not available", the page isn't being served securely.
+- **Updates:** while you're online the app always fetches the newest files (falling back to the saved copy if the network is down or takes more than 3 seconds). If you add or rename files, add them to `ASSETS` in `sw.js` and bump `CACHE` (e.g. `commit-v2`) so devices pick up the change.
+- **Clearing Safari's website data** removes both the saved files and your journal/habit/expense data, so export a backup first.
+
 ### On the iPhone
 
+**Recommended (works offline):** host the folder on an HTTPS static host, open the URL in Safari, and tap **Share → Add to Home Screen**. The Home Screen icon comes from `icon-180.png`.
+
+**Quick local test (online only):**
 1. On your computer, serve this folder from a machine on the same Wi-Fi as the phone:
    ```bash
    python -m http.server 8000
    ```
    (Allow it through the firewall if prompted.)
 2. On the phone, open `http://<your-computer's-LAN-IP>:8000` in Safari.
-3. Tap **Share → Add to Home Screen** to run it full-screen like an app.
-
-Alternatively, host the three files on any static host (GitHub Pages, Netlify, Vercel, etc.).
+3. Tap **Share → Add to Home Screen** to run it full-screen like an app. Offline mode won't be available over plain HTTP (see above).
 
 ## Your data
 
@@ -81,6 +91,9 @@ Settings:
 | `index.html` | Page shell and bottom tab bar |
 | `style.css` | All styling (colours are CSS variables; the light theme overrides them under `:root[data-theme="light"]`) |
 | `app.js` | All logic: storage, views, events (ES5, one IIFE) |
+| `sw.js` | Service worker for offline support |
+| `manifest.json` | Web app manifest (name, colours, icons) |
+| `icon-180.png`, `icon-192.png`, `icon-512.png` | App icons (180px is the iPhone Home Screen icon) |
 
 ### Data shape
 
