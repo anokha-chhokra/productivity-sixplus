@@ -34,6 +34,13 @@
     { id: 'sale', name: 'Sale', icon: '🏷', color: '#f0883e' },
     { id: 'other-in', name: 'Other', icon: '💰', color: '#8b949e' }
   ];
+  // display symbols only: amounts are never converted between currencies
+  var CURRENCIES = [
+    ['$', 'Dollar'], ['€', 'Euro'], ['£', 'Pound'], ['¥', 'Yen / Yuan'], ['₹', 'Rupee'], ['₩', 'Won'],
+    ['₽', 'Ruble'], ['₺', 'Lira'], ['₱', 'Peso'], ['฿', 'Baht'], ['₫', 'Dong'], ['₦', 'Naira'],
+    ['₪', 'Shekel'], ['৳', 'Taka'], ['Rs', 'Rupee'], ['R$', 'Real'], ['R', 'Rand'], ['CHF', 'Franc'],
+    ['kr', 'Krona'], ['zł', 'Zloty'], ['AED', 'Dirham'], ['SAR', 'Riyal'], ['RM', 'Ringgit'], ['Rp', 'Rupiah']
+  ];
   var ACCT_ICONS = ['💵', '🏦', '💳', '👛', '📱', '🐷'];
 
   var state = blankState();
@@ -116,13 +123,15 @@
     for (var i = 0; i < list.length; i++) { if (list[i].id === id) { return list[i]; } }
     return null;
   }
-  function fmt(n) {
+  // symbols that end in a letter (CHF, kr, Rs...) get a space before the number; $ € ₹ etc. do not
+  function curPrefix(sym) { return sym + (/[A-Za-z]$/.test(sym) ? ' ' : ''); }
+  function fmt(n, sym) {
     var neg = n < 0, s, parts;
     n = Math.abs(n);
     s = (Math.round(n * 100) / 100).toFixed(2).replace(/\.00$/, '');
     parts = s.split('.');
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    return (neg ? '-' : '') + state.settings.currency + parts.join('.');
+    return (neg ? '-' : '') + curPrefix(sym === undefined ? state.settings.currency : sym) + parts.join('.');
   }
   function rgba(hex, a) {
     var n = parseInt(hex.slice(1), 16);
@@ -420,7 +429,7 @@
   }
   function signed(n) { return (n > 0 ? '+' : '') + fmt(n); }
   function fmtShort(n) {
-    var a = Math.abs(n), sign = n < 0 ? '-' : '', c = state.settings.currency;
+    var a = Math.abs(n), sign = n < 0 ? '-' : '', c = curPrefix(state.settings.currency);
     if (a >= 1e6) { return sign + c + (a / 1e6).toFixed(1).replace(/\.0$/, '') + 'M'; }
     if (a >= 1e4) { return sign + c + (a / 1e3).toFixed(1).replace(/\.0$/, '') + 'K'; }
     return fmt(n);
@@ -936,10 +945,27 @@
     return '⏳ Setting up. Keep the app open while online, then reopen it once.';
   }
 
+  function currencyChips(current) {
+    var html = '', i;
+    for (i = 0; i < CURRENCIES.length; i++) {
+      html += '<button class="cchip' + (CURRENCIES[i][0] === current ? ' on' : '') + '" data-act="cur" data-cur="' + esc(CURRENCIES[i][0]) + '"><b>' + esc(CURRENCIES[i][0]) + '</b><span>' + CURRENCIES[i][1] + '</span></button>';
+    }
+    return html;
+  }
+  // keep the chip highlight and the preview in step with the symbol box
+  function refreshCurrency() {
+    var v = el('s-cur').value.replace(/^\s+|\s+$/g, ''), chips = document.querySelectorAll('#s-curs .cchip'), i;
+    for (i = 0; i < chips.length; i++) { chips[i].className = 'cchip' + (chips[i].getAttribute('data-cur') === v ? ' on' : ''); }
+    el('s-prev').textContent = fmt(1234.5, v);
+  }
+
   function openSettings() {
     ui.edit = { type: 'settings' };
     showSheet('<div class="scrim" data-act="close"></div><div class="sheet full">' + head('Settings', 's-save') +
-      '<label>Currency symbol</label><input type="text" id="s-cur" maxlength="3" value="' + esc(state.settings.currency) + '" autocapitalize="off" autocorrect="off">' +
+      '<label>Currency symbol</label><div class="fstrip" id="s-curs">' + currencyChips(state.settings.currency) + '</div>' +
+      '<div class="curline"><input type="text" id="s-cur" maxlength="4" value="' + esc(state.settings.currency) + '" placeholder="Custom" autocapitalize="off" autocorrect="off">' +
+      '<span class="curprev" id="s-prev">' + esc(fmt(1234.5, state.settings.currency)) + '</span></div>' +
+      '<p class="note">Only the symbol changes. Amounts are not converted.</p>' +
       '<label>Theme</label><div class="seg" style="margin-bottom:0"><button data-act="theme" data-theme="dark" class="' + (state.settings.theme === 'dark' ? 'on' : '') + '">Dark</button>' +
       '<button data-act="theme" data-theme="light" class="' + (state.settings.theme === 'light' ? 'on' : '') + '">Light</button></div>' +
       '<label>Monthly budget (0 = none)</label><input type="number" step="any" min="0" inputmode="decimal" id="s-bud" value="' + (state.settings.budget || '') + '" placeholder="0">' +
@@ -1172,6 +1198,7 @@
     case 't-close': hideToast(); break;
 
     /* settings */
+    case 'cur': el('s-cur').value = act.getAttribute('data-cur'); refreshCurrency(); break;
     case 's-save':
       var cur = el('s-cur').value.replace(/^\s+|\s+$/g, '');
       state.settings.currency = cur;
@@ -1217,6 +1244,7 @@
 
   // live journal search: only the list re-renders so the field keeps focus
   document.addEventListener('input', function (ev) {
+    if (ev.target.id === 's-cur') { refreshCurrency(); return; }
     if (ev.target.id === 'jsearch') { ui.q = ev.target.value; el('jlist').innerHTML = journalList(); }
   }, false);
 

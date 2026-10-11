@@ -86,7 +86,7 @@ Everything is stored in the browser's `localStorage` under the key `commit.v1`. 
 **Back up regularly:** open settings (Home tab, top right), tap **Export**, and save the text somewhere safe. To restore (or move data between devices or between Safari and the Home Screen app), paste the text into the box and tap **Import**. Import replaces all current data.
 
 Settings:
-- **Currency symbol:** up to 3 characters (default `$`).
+- **Currency symbol:** pick one from a scrolling row of 24 common symbols (`$ € £ ¥ ₹ ₩ ₽ ₺ ₱ ฿ ₫ ₦ ₪ ৳ Rs R$ R CHF kr zł AED SAR RM Rp`) or type your own (up to 4 characters). A live preview shows how amounts will look. It only changes the symbol shown: **amounts are never converted**, and all your existing amounts stay exactly as entered. Symbols that end in a letter (`CHF`, `kr`, `Rs`...) get a space before the number (`CHF 1,234.50`). The default is `$`.
 - **Theme:** Dark (default) or Light. It applies instantly, is remembered, and is included in backups.
 - **Monthly budget:** `0` means no budget.
 

@@ -471,4 +471,12 @@ svg.heat text { fill: var(--muted); font-size: 11px; font-family: -apple-system,
 .mbar i { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 4px; }
 .mcol span { display: block; font-size: 18px; line-height: 22px; }
 .mcol b { display: block; font-size: 12px; color: var(--muted); font-weight: 600; }
+/* currency picker */
+.cchip { -webkit-flex: 0 0 auto; flex: 0 0 auto; width: 68px; height: 56px; margin-right: 8px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); text-align: center; color: var(--text); }
+.cchip b { display: block; font-size: 19px; line-height: 24px; margin-top: 5px; font-weight: 600; }
+.cchip span { display: block; font-size: 10px; color: var(--muted); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+.cchip.on { border-color: var(--accent); }
+.curline { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; margin-top: 6px; }
+.curline input[type=text] { -webkit-flex: 0 0 110px; flex: 0 0 110px; width: 110px; }
+.curprev { margin-left: 14px; font-size: 20px; font-weight: 700; }
 .sheet .note { font-size: 13px; color: var(--muted); margin: 6px 0 0; line-height: 1.4; }
