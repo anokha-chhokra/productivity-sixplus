@@ -37,7 +37,7 @@
   var ACCT_ICONS = ['💵', '🏦', '💳', '👛', '📱', '🐷'];
 
   var state = blankState();
-  var ui = { tab: 'home', sub: 'today', date: todayKey(), month: monthOf(todayKey()), edit: null, stripLeft: null, q: '', allRem: false, showDone: false, toast: null, remSig: '', acct: 'all', lastAcct: null };
+  var ui = { tab: 'home', sub: 'today', date: todayKey(), month: monthOf(todayKey()), edit: null, stripLeft: null, q: '', allRem: false, showDone: false, toast: null, remSig: '', acct: 'all', lastAcct: null, tag: 'all' };
 
   function defaultAccounts() {
     return [
@@ -76,6 +76,7 @@
   function migrate(data) {
     var s = blankState();
     if (data && data.habits instanceof Array) { s.habits = data.habits; }
+    s.habits.forEach(function (h) { if (!(h.tags instanceof Array)) { h.tags = []; } });
     if (data && data.journal instanceof Array) { s.journal = data.journal; }
     if (data && data.expenses instanceof Array) { s.expenses = data.expenses; }
     if (data && data.reminders instanceof Array) { s.reminders = data.reminders; }
@@ -168,10 +169,53 @@
     }
     return sched ? Math.round(done * 100 / sched) : 0;
   }
-  function dayCounts(k) {
-    var s = 0, d = 0, i;
-    for (i = 0; i < state.habits.length; i++) {
-      if (scheduled(state.habits[i], k)) { s++; if (isDone(state.habits[i], k)) { d++; } }
+  /* tags: free-form labels on habits, matched case-insensitively */
+  var SUGGEST_TAGS = ['Health', 'Work', 'Mind', 'Home', 'Learning'];
+  function tagKey(t) { return t.toLowerCase(); }
+  function hasTag(h, tag) {
+    var i;
+    if (!tag || tag === 'all') { return true; }
+    for (i = 0; i < h.tags.length; i++) { if (tagKey(h.tags[i]) === tagKey(tag)) { return true; } }
+    return false;
+  }
+  function habitsFor(tag) { return state.habits.filter(function (h) { return hasTag(h, tag); }); }
+  // distinct tags in use (first spelling wins), sorted A-Z
+  function mergeTags(lists) {
+    var seen = {}, out = [], i, j, t;
+    for (i = 0; i < lists.length; i++) {
+      for (j = 0; j < lists[i].length; j++) {
+        t = lists[i][j];
+        if (!seen[tagKey(t)]) { seen[tagKey(t)] = 1; out.push(t); }
+      }
+    }
+    return out.sort(function (a, b) { return tagKey(a) < tagKey(b) ? -1 : tagKey(a) > tagKey(b) ? 1 : 0; });
+  }
+  function allTags() { return mergeTags(state.habits.map(function (h) { return h.tags; })); }
+  // trim, drop a leading #, cap the length, and reuse the spelling of a tag that already exists
+  function cleanTag(raw, known) {
+    var t = raw.replace(/^[#\s]+|\s+$/g, '').replace(/\s+/g, ' ').slice(0, 20), i;
+    if (!t) { return ''; }
+    for (i = 0; i < known.length; i++) { if (tagKey(known[i]) === tagKey(t)) { return known[i]; } }
+    return t;
+  }
+  function tagPills(h) {
+    if (!h.tags.length) { return ''; }
+    return '<div class="tagrow">' + h.tags.map(function (t) { return '<span class="tpill">' + esc(t) + '</span>'; }).join('') + '</div>';
+  }
+  function tagStrip() {
+    var tags = allTags(), i, html;
+    if (!tags.length) { return ''; }
+    html = '<div class="fstrip"><button class="fchip' + (ui.tag === 'all' ? ' on' : '') + '" data-act="h-filter" data-tag="all">All</button>';
+    for (i = 0; i < tags.length; i++) {
+      html += '<button class="fchip' + (tagKey(ui.tag) === tagKey(tags[i]) ? ' on' : '') + '" data-act="h-filter" data-tag="' + esc(tags[i]) + '">' + esc(tags[i]) + '</button>';
+    }
+    return html + '</div>';
+  }
+
+  function dayCounts(k, tag) {
+    var s = 0, d = 0, i, list = habitsFor(tag);
+    for (i = 0; i < list.length; i++) {
+      if (scheduled(list[i], k)) { s++; if (isDone(list[i], k)) { d++; } }
     }
     return { s: s, d: d };
   }
@@ -210,16 +254,16 @@
 
     html += '<div class="strip" id="strip">';
     for (i = 13; i >= 0; i--) {
-      var dk = addDays(t, -i), c = dayCounts(dk);
+      var dk = addDays(t, -i), c = dayCounts(dk, ui.tag);
       html += '<button class="day' + (dk === k ? ' sel' : '') + (c.s && c.d === c.s ? ' full' : '') +
         '" data-act="pick" data-date="' + dk + '"><span class="dw">' + DAY_SHORT[dow(dk)] + '</span><span class="dn">' +
         parse(dk).getDate() + '</span></button>';
     }
-    html += '</div>';
+    html += '</div>' + tagStrip();
 
-    var cnt = dayCounts(k), hidden = 0, cards = '';
-    for (i = 0; i < state.habits.length; i++) {
-      h = state.habits[i];
+    var cnt = dayCounts(k, ui.tag), hidden = 0, cards = '', list = habitsFor(ui.tag);
+    for (i = 0; i < list.length; i++) {
+      h = list[i];
       if (k < h.created) { continue; }
       var on = isDone(h, k), sch = scheduled(h, k);
       if (!sch && !on) { hidden++; continue; }
@@ -228,7 +272,7 @@
       cards += '<div class="card' + (on ? ' is-done' : '') + (sch ? '' : ' rest') + '">' +
         '<button class="check' + (on ? ' on' : '') + '" style="border-color:' + h.color + ';background:' + (on ? h.color : 'transparent') +
         '" data-act="toggle" data-id="' + h.id + '" aria-label="Toggle ' + esc(h.name) + '">' + CHECK_SVG + '</button>' +
-        '<div class="info"><div class="name">' + esc(h.name) + '</div><div class="meta">' + meta + ' · ' + scheduleText(h) + '</div></div>' +
+        '<div class="info"><div class="name">' + esc(h.name) + '</div><div class="meta">' + meta + ' · ' + scheduleText(h) + '</div>' + tagPills(h) + '</div>' +
         '<button class="more" data-act="h-edit" data-id="' + h.id + '" aria-label="Edit">•••</button></div>';
     }
     var pct = cnt.s ? Math.round(cnt.d * 100 / cnt.s) : 0;
@@ -268,23 +312,34 @@
   }
 
   function viewHabitStats() {
-    var i, h, html = '<div class="top"><div><div class="eyebrow">Overview</div><h1>Stats</h1></div></div>';
+    var i, h, html = '<div class="top"><div><div class="eyebrow">Overview</div><h1>Stats</h1></div></div>' + tagStrip(), list = habitsFor(ui.tag);
     if (!state.habits.length) {
       return html + '<div class="empty"><p>Add a commitment on the Today view to start tracking.</p></div>';
     }
     var total = 0, bestNow = 0;
-    for (i = 0; i < state.habits.length; i++) {
-      h = state.habits[i];
+    for (i = 0; i < list.length; i++) {
+      h = list[i];
       total += Object.keys(h.log).length;
       var st = streak(h);
       if (st > bestNow) { bestNow = st; }
     }
     html += '<div class="tiles"><div class="tile"><b>' + total + '</b><span>Total commits</span></div>' +
       '<div class="tile"><b>' + bestNow + '</b><span>Longest streak</span></div>' +
-      '<div class="tile"><b>' + rate(state.habits, 30) + '%</b><span>Last 30 days</span></div></div>';
+      '<div class="tile"><b>' + rate(list, 30) + '%</b><span>Last 30 days</span></div></div>';
 
-    html += '<h2 class="sec">All commitments</h2><div class="panel">' + heatmap(function (k) {
-      var c = dayCounts(k), lvl;
+    if (ui.tag === 'all' && allTags().length) {
+      var tg = allTags(), tl, tr;
+      html += '<h2 class="sec">By tag</h2><div class="panel">';
+      for (i = 0; i < tg.length; i++) {
+        tl = habitsFor(tg[i]); tr = rate(tl, 30);
+        html += '<div class="cat"><div class="r"><span>' + esc(tg[i]) + ' <span style="font-weight:400;color:var(--muted)">· ' + tl.length + (tl.length === 1 ? ' habit' : ' habits') +
+          '</span></span><span>' + tr + '%</span></div><div class="cbar"><i style="width:' + Math.max(3, tr) + '%;background:var(--accent)"></i></div></div>';
+      }
+      html += '<p class="note" style="margin:10px 0 0;font-size:12px;color:var(--muted)">Completion over the last 30 days.</p></div>';
+    }
+
+    html += '<h2 class="sec">' + (ui.tag === 'all' ? 'All commitments' : esc(ui.tag)) + '</h2><div class="panel">' + heatmap(function (k) {
+      var c = dayCounts(k, ui.tag), lvl;
       if (!c.s) { return 'class="loff"'; }
       var r = c.d / c.s;
       lvl = c.d === 0 ? 0 : r <= 0.34 ? 1 : r <= 0.67 ? 2 : r < 1 ? 3 : 4;
@@ -293,8 +348,8 @@
       '<div class="legend">Less<svg width="12" height="12"><rect width="12" height="12" rx="3" class="l0"/></svg><svg width="12" height="12"><rect width="12" height="12" rx="3" class="l1"/></svg><svg width="12" height="12"><rect width="12" height="12" rx="3" class="l2"/></svg><svg width="12" height="12"><rect width="12" height="12" rx="3" class="l3"/></svg><svg width="12" height="12"><rect width="12" height="12" rx="3" class="l4"/></svg>More</div></div>';
 
     html += '<h2 class="sec">Each commitment</h2>';
-    for (i = 0; i < state.habits.length; i++) {
-      h = state.habits[i];
+    for (i = 0; i < list.length; i++) {
+      h = list[i];
       html += '<div class="panel"><div class="hrow"><div class="n"><span class="dot" style="background:' + h.color + '"></span>' + esc(h.name) +
         '</div><div class="hstats"><b>' + streak(h) + '</b> now · <b>' + bestStreak(h) + '</b> best · <b>' + rate([h], 30) + '%</b></div></div>' +
         heatmap((function (hh) {
@@ -308,6 +363,7 @@
   }
 
   function viewCommit() {
+    if (ui.tag !== 'all' && !allTags().some(function (t) { return tagKey(t) === tagKey(ui.tag); })) { ui.tag = 'all'; }
     return '<div class="seg"><button data-act="sub" data-sub="today" class="' + (ui.sub === 'today' ? 'on' : '') + '">Today</button>' +
       '<button data-act="sub" data-sub="stats" class="' + (ui.sub === 'stats' ? 'on' : '') + '">Stats</button></div>' +
       (ui.sub === 'today' ? viewHabitsToday() : viewHabitStats());
@@ -643,12 +699,47 @@
     return '<div class="shead"><button class="link dim" data-act="close">Cancel</button><b>' + title + '</b><button class="link strong" data-act="' + saveAct + '">Save</button></div>';
   }
 
+  // every tag the user could pick: tags already in use, ones added in this sheet, or starter suggestions
+  function knownTags(e) {
+    var lists = [allTags(), e.tags, e.extra];
+    var merged = mergeTags(lists);
+    return merged.length ? merged : SUGGEST_TAGS;
+  }
+  function tagChips(e) {
+    var tags = knownTags(e), html = '', i, on;
+    for (i = 0; i < tags.length; i++) {
+      on = e.tags.some(function (t) { return tagKey(t) === tagKey(tags[i]); });
+      html += '<button class="tchip' + (on ? ' on' : '') + '" data-act="h-tag" data-tag="' + esc(tags[i]) + '">' + esc(tags[i]) + '</button>';
+    }
+    return html;
+  }
+  function toggleTag(e, tag) {
+    var at = -1, i;
+    for (i = 0; i < e.tags.length; i++) { if (tagKey(e.tags[i]) === tagKey(tag)) { at = i; } }
+    if (at > -1) { e.tags.splice(at, 1); } else { e.tags.push(tag); }
+  }
+  // add whatever is typed in the tag box to this habit; returns true if something was added
+  function addTagFromInput(e) {
+    var box = el('h-tag'), t;
+    if (!box) { return false; }
+    t = cleanTag(box.value, knownTags(e).concat(e.tags));
+    box.value = '';
+    if (!t) { return false; }
+    if (!e.tags.some(function (x) { return tagKey(x) === tagKey(t); })) { e.tags.push(t); }
+    if (!mergeTags([allTags(), e.extra]).some(function (x) { return tagKey(x) === tagKey(t); })) { e.extra.push(t); }
+    el('h-tags').innerHTML = tagChips(e);
+    return true;
+  }
+
   function openHabit(id) {
     var h = id ? byId(state.habits, id) : null;
-    ui.edit = h ? { type: 'habit', id: h.id, days: h.days.slice(), color: h.color }
-                : { type: 'habit', id: null, days: [0, 1, 2, 3, 4, 5, 6], color: COLORS[state.habits.length % COLORS.length] };
+    ui.edit = h ? { type: 'habit', id: h.id, days: h.days.slice(), color: h.color, tags: h.tags.slice(), extra: [] }
+                : { type: 'habit', id: null, days: [0, 1, 2, 3, 4, 5, 6], color: COLORS[state.habits.length % COLORS.length],
+                    tags: ui.tag !== 'all' ? [ui.tag] : [], extra: [] };
     var e = ui.edit, i, html = '<div class="scrim" data-act="close"></div><div class="sheet">' + head(h ? 'Edit commitment' : 'New commitment', 'h-save') +
       '<label>Name</label><input type="text" id="f-name" maxlength="40" value="' + esc(h ? h.name : '') + '" placeholder="e.g. Read 20 minutes" autocapitalize="sentences" autocorrect="off">' +
+      '<label>Tags</label><div class="tagchips" id="h-tags">' + tagChips(e) + '</div>' +
+      '<div class="taginput"><input type="text" id="h-tag" maxlength="20" placeholder="New tag, e.g. Health" autocapitalize="words" autocorrect="off"><button class="btn" data-act="h-tagadd">Add</button></div>' +
       '<label>Repeat on</label><div class="chips">';
     for (i = 0; i < DAY_ORDER.length; i++) {
       var d = DAY_ORDER[i];
@@ -866,12 +957,16 @@
       var sw = document.querySelectorAll('.sw');
       for (i = 0; i < sw.length; i++) { sw[i].className = 'sw' + (sw[i].getAttribute('data-color') === e.color ? ' on' : ''); }
       break;
+    case 'h-tag': toggleTag(e, act.getAttribute('data-tag')); el('h-tags').innerHTML = tagChips(e); break;
+    case 'h-tagadd': addTagFromInput(e); el('h-tag').focus(); break;
+    case 'h-filter': ui.tag = act.getAttribute('data-tag'); render(); break;
     case 'h-save':
       var name = el('f-name').value.replace(/^\s+|\s+$/g, '');
       if (!name) { el('f-name').focus(); break; }
       if (!e.days.length) { window.alert('Pick at least one day.'); break; }
-      if (e.id) { h = byId(state.habits, e.id); h.name = name; h.days = e.days.slice(); h.color = e.color; }
-      else { addHabit(name, e.days.slice(), e.color); }
+      addTagFromInput(e); // include a tag that was typed but not yet added
+      if (e.id) { h = byId(state.habits, e.id); h.name = name; h.days = e.days.slice(); h.color = e.color; h.tags = e.tags.slice(); }
+      else { addHabit(name, e.days.slice(), e.color, e.tags.slice()); }
       save(); closeSheet(); render();
       break;
     case 'h-delete':
@@ -1042,9 +1137,17 @@
     }
   }
 
-  function addHabit(name, days, color) {
-    state.habits.push({ id: newId('h'), name: name, days: days, color: color, created: todayKey(), log: {} });
+  function addHabit(name, days, color, tags) {
+    state.habits.push({ id: newId('h'), name: name, days: days, color: color, tags: tags || [], created: todayKey(), log: {} });
   }
+
+  // Enter in the tag box adds the tag instead of doing nothing
+  document.addEventListener('keydown', function (ev) {
+    if (ev.target.id === 'h-tag' && (ev.keyCode === 13 || ev.key === 'Enter') && ui.edit && ui.edit.type === 'habit') {
+      ev.preventDefault();
+      addTagFromInput(ui.edit);
+    }
+  }, false);
 
   // live journal search: only the list re-renders so the field keeps focus
   document.addEventListener('input', function (ev) {

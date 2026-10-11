@@ -29,7 +29,9 @@ It is plain HTML, CSS and JavaScript. There is no build step, no dependencies an
 ### Commit: habit tracker
 - **Today** view: tap the big circle to check off a commitment. The 14-day strip lets you log or correct earlier days.
 - Each commitment repeats on the weekdays you choose (every day, weekdays, or any custom set) and has its own colour. Days it isn't scheduled don't break a streak.
-- **Stats** view: total commits, longest streak, 30-day completion rate, an overall 17-week heatmap, and a heatmap plus current/best streak and rate for each commitment.
+- **Tags:** label a commitment with any number of tags (Health, Work, Mind...). In the commitment sheet, tap existing tags to turn them on or off, or type a new one and tap **Add** (or Enter). Tags are matched ignoring case, so `health` and `Health` are the same tag, and a leading `#` is dropped. Tags show as small pills on each card, and a tag disappears on its own once no commitment uses it.
+- **Filter by tag:** a row of tag chips on both Today and Stats narrows the list, the progress bar, the day-strip dots, the totals and the heatmaps to that tag. While a tag is selected, new commitments start with it.
+- **Stats** view: total commits, longest streak, 30-day completion rate, an overall 17-week heatmap, and a heatmap plus current/best streak and rate for each commitment. With tags in use, a **By tag** panel compares each tag's 30-day completion rate.
 
 ### Expenses
 - **Income and expenses.** The **+** button opens a sheet with an Expense / Income switch. Each transaction has an amount, an **account**, a category, an optional note and a date.
@@ -102,7 +104,7 @@ Settings:
 
 ```json
 {
-  "habits":   [{ "id": "", "name": "", "days": [0,1,2,3,4,5,6], "color": "#3fb950", "created": "YYYY-MM-DD", "log": { "YYYY-MM-DD": 1 } }],
+  "habits":   [{ "id": "", "name": "", "days": [0,1,2,3,4,5,6], "color": "#3fb950", "tags": ["Health"], "created": "YYYY-MM-DD", "log": { "YYYY-MM-DD": 1 } }],
   "journal":  [{ "id": "", "ts": 0, "date": "YYYY-MM-DD", "mood": 0, "text": "" }],
   "accounts": [{ "id": "", "name": "Cash", "icon": "💵", "color": "#3fb950", "opening": 0 }],
   "expenses": [{ "id": "", "ts": 0, "date": "YYYY-MM-DD", "amount": 0, "type": "expense|income", "acct": "account id", "cat": "food", "note": "" }],

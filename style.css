@@ -443,4 +443,13 @@ svg.heat text { fill: var(--muted); font-size: 11px; font-family: -apple-system,
 .icons button { -webkit-flex: 1 1 0; flex: 1 1 0; height: 48px; font-size: 24px; margin-right: 6px; border-radius: 12px; border: 2px solid transparent; background: var(--bg); }
 .icons button:last-child { margin-right: 0; }
 .icons button.on { border-color: var(--accent); }
+/* habit tags */
+.tagrow { display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; margin-top: 6px; }
+.tpill { font-size: 11px; font-weight: 600; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 1px 8px; margin: 0 4px 3px 0; }
+.tagchips { display: -webkit-flex; display: flex; -webkit-flex-wrap: wrap; flex-wrap: wrap; margin-right: -8px; }
+.tchip { height: 36px; padding: 0 14px; margin: 0 8px 8px 0; border-radius: 18px; border: 1px solid var(--line); background: var(--bg); font-size: 14px; font-weight: 600; color: var(--muted); }
+.tchip.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+.taginput { display: -webkit-flex; display: flex; margin-top: 2px; }
+.taginput input[type=text] { -webkit-flex: 1 1 auto; flex: 1 1 auto; min-width: 0; width: auto; }
+.taginput .btn { -webkit-flex: 0 0 76px; flex: 0 0 76px; height: 48px; margin: 0 0 0 8px; }
 .sheet .note { font-size: 13px; color: var(--muted); margin: 6px 0 0; line-height: 1.4; }
