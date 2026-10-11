@@ -452,4 +452,23 @@ svg.heat text { fill: var(--muted); font-size: 11px; font-family: -apple-system,
 .taginput { display: -webkit-flex; display: flex; margin-top: 2px; }
 .taginput input[type=text] { -webkit-flex: 1 1 auto; flex: 1 1 auto; min-width: 0; width: auto; }
 .taginput .btn { -webkit-flex: 0 0 76px; flex: 0 0 76px; height: 48px; margin: 0 0 0 8px; }
+/* mood trend */
+.mood-card { margin-top: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 14px; }
+.seg.sm { margin: 0; width: 150px; padding: 2px; border-radius: 10px; }
+.seg.sm button { height: 28px; font-size: 13px; border-radius: 8px; }
+.mt-head { display: -webkit-flex; display: flex; -webkit-align-items: baseline; align-items: baseline; margin: 8px 0 4px; }
+.mt-avg { font-size: 34px; font-weight: 700; letter-spacing: -.02em; }
+.mt-face { font-size: 24px; margin: 0 10px 0 6px; }
+.mt-delta { font-size: 13px; color: var(--muted); }
+.mood-svg { display: block; width: 100%; height: auto; }
+.mt-grid { stroke: var(--line); stroke-width: 1; }
+.mt-line { fill: none; stroke: var(--muted); stroke-opacity: .55; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.mood-svg .mt-emoji { font-size: 12px; fill: var(--text); }
+.mood-svg .mt-x { font-size: 11px; fill: var(--muted); font-family: -apple-system, Helvetica, Arial, sans-serif; }
+.mt-dist { display: -webkit-flex; display: flex; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.mcol { -webkit-flex: 1 1 0; flex: 1 1 0; text-align: center; }
+.mbar { height: 36px; width: 16px; margin: 0 auto 4px; border-radius: 4px; background: var(--bg); position: relative; overflow: hidden; }
+.mbar i { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 4px; }
+.mcol span { display: block; font-size: 18px; line-height: 22px; }
+.mcol b { display: block; font-size: 12px; color: var(--muted); font-weight: 600; }
 .sheet .note { font-size: 13px; color: var(--muted); margin: 6px 0 0; line-height: 1.4; }

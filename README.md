@@ -13,6 +13,7 @@ It is plain HTML, CSS and JavaScript. There is no build step, no dependencies an
 ### Home: journal
 - Write entries with an optional mood (5 faces). Tap a mood on the compose card to start an entry with it already selected.
 - Entries are grouped by day, newest first. Tap an entry to edit or delete it.
+- **Mood trend** card (appears once any entry has a mood): switch between 7, 30 and 90 days to see your average mood, whether it's up or down versus the previous period, a line chart of your daily average (several entries on one day are averaged), and how many entries fell on each of the five moods. Entries without a mood are ignored.
 - Search your journal (appears once you have more than 3 entries).
 - Header shows your entry count and writing streak.
 - **Reminders** card below the expense summary (see below).

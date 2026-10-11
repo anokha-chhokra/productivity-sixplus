@@ -37,7 +37,7 @@
   var ACCT_ICONS = ['💵', '🏦', '💳', '👛', '📱', '🐷'];
 
   var state = blankState();
-  var ui = { tab: 'home', sub: 'today', date: todayKey(), month: monthOf(todayKey()), edit: null, stripLeft: null, q: '', allRem: false, showDone: false, toast: null, remSig: '', acct: 'all', lastAcct: null, tag: 'all' };
+  var ui = { tab: 'home', sub: 'today', date: todayKey(), month: monthOf(todayKey()), edit: null, stripLeft: null, q: '', allRem: false, showDone: false, toast: null, remSig: '', acct: 'all', lastAcct: null, tag: 'all', moodRange: 30 };
 
   function defaultAccounts() {
     return [
@@ -677,6 +677,71 @@
     return html + '</button>';
   }
 
+  /* mood trend: daily average mood from journal entries over the last 7 / 30 / 90 days */
+  var MOOD_COLORS = ['#f85149', '#f0883e', '#d29922', '#56d364', '#3fb950'];
+  var MOOD_RANGES = [7, 30, 90];
+
+  function moodChart(days, start, R) {
+    var W = 380, H = 132, pl = 24, pr = 8, pt = 10, pb = 22, pw = W - pl - pr, ph = H - pt - pb, m, i, k, v, pts = [], dots = '';
+    function X(idx) { return pl + idx * pw / (R - 1); }
+    function Y(val) { return pt + (5 - val) * ph / 4; }
+    var s = '<svg class="mood-svg" viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg">';
+    for (m = 1; m <= 5; m++) {
+      s += '<line class="mt-grid" x1="' + pl + '" x2="' + (W - pr) + '" y1="' + Y(m) + '" y2="' + Y(m) + '"/><text class="mt-emoji" x="0" y="' + (Y(m) + 4) + '">' + MOODS[m - 1] + '</text>';
+    }
+    for (i = 0; i < R; i++) {
+      k = addDays(start, i);
+      if (days[k]) { v = days[k].s / days[k].n; pts.push({ x: X(i), y: Y(v), v: v }); }
+    }
+    if (pts.length > 1) { s += '<polyline class="mt-line" points="' + pts.map(function (p) { return p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join(' ') + '"/>'; }
+    var r = R <= 7 ? 5 : R <= 30 ? 3.6 : 2.6;
+    for (i = 0; i < pts.length; i++) {
+      dots += '<circle cx="' + pts[i].x.toFixed(1) + '" cy="' + pts[i].y.toFixed(1) + '" r="' + r + '" fill="' + MOOD_COLORS[Math.round(pts[i].v) - 1] + '"/>';
+    }
+    var sd = parse(start);
+    return s + dots + '<text class="mt-x" x="' + pl + '" y="' + (H - 5) + '">' + MONTHS[sd.getMonth()] + ' ' + sd.getDate() + '</text>' +
+      '<text class="mt-x" x="' + (W - pr) + '" y="' + (H - 5) + '" text-anchor="end">Today</text></svg>';
+  }
+
+  function moodTrend() {
+    var R = ui.moodRange, t = todayKey(), start = addDays(t, -(R - 1)), pStart = addDays(t, -(2 * R - 1)), pEnd = addDays(t, -R);
+    var i, e, sum = 0, cnt = 0, psum = 0, pcnt = 0, any = 0, days = {}, counts = [0, 0, 0, 0, 0], day;
+    for (i = 0; i < state.journal.length; i++) {
+      e = state.journal[i];
+      if (!e.mood) { continue; }
+      any++;
+      if (e.date >= start && e.date <= t) {
+        sum += e.mood; cnt++; counts[e.mood - 1]++;
+        day = days[e.date] || (days[e.date] = { s: 0, n: 0 });
+        day.s += e.mood; day.n++;
+      } else if (e.date >= pStart && e.date <= pEnd) { psum += e.mood; pcnt++; }
+    }
+    if (!any) { return ''; }
+
+    var html = '<div class="mood-card"><div class="g-top"><span class="eyebrow">Mood trend</span><div class="seg sm">';
+    for (i = 0; i < MOOD_RANGES.length; i++) {
+      html += '<button data-act="m-range" data-r="' + MOOD_RANGES[i] + '" class="' + (MOOD_RANGES[i] === R ? 'on' : '') + '">' + MOOD_RANGES[i] + 'D</button>';
+    }
+    html += '</div></div>';
+    if (!cnt) { return html + '<p class="rem-empty">No moods logged in the last ' + R + ' days.</p></div>'; }
+
+    var avg = sum / cnt, delta = '';
+    if (pcnt) {
+      var diff = avg - psum / pcnt;
+      delta = Math.abs(diff) < 0.1 ? 'Steady vs previous ' + R + ' days' :
+        '<span style="color:' + (diff > 0 ? 'var(--good)' : 'var(--bad)') + '">' + (diff > 0 ? '▲ ' : '▼ ') + Math.abs(diff).toFixed(1) + '</span> vs previous ' + R + ' days';
+    } else { delta = cnt + (cnt === 1 ? ' entry' : ' entries') + ' with a mood'; }
+    html += '<div class="mt-head"><span class="mt-avg">' + avg.toFixed(1) + '</span><span class="mt-face">' + MOODS[Math.round(avg) - 1] + '</span><span class="mt-delta">' + delta + '</span></div>';
+    html += moodChart(days, start, R);
+
+    var max = Math.max.apply(null, counts);
+    html += '<div class="mt-dist">';
+    for (i = 0; i < 5; i++) {
+      html += '<div class="mcol"><div class="mbar"><i style="height:' + (counts[i] ? Math.max(8, Math.round(counts[i] * 100 / max)) : 0) + '%;background:' + MOOD_COLORS[i] + '"></i></div><span>' + MOODS[i] + '</span><b>' + counts[i] + '</b></div>';
+    }
+    return html + '</div></div>';
+  }
+
   function viewHome() {
     var n = state.journal.length, st = journalStreak(), now = new Date(), i;
     var html = '<div class="top"><div><div class="eyebrow">' + DAY_LONG[now.getDay()] + ', ' + MONTHS[now.getMonth()] + ' ' + now.getDate() + '</div><h1>Journal</h1>' +
@@ -685,7 +750,7 @@
     html += gistCard() + remindersCard();
     html += '<div class="compose"><button class="ask" data-act="j-new" data-mood="0">What’s on your mind?</button><div class="moodrow">';
     for (i = 0; i < MOODS.length; i++) { html += '<button class="mood-btn" data-act="j-new" data-mood="' + (i + 1) + '" aria-label="Mood ' + (i + 1) + '">' + MOODS[i] + '</button>'; }
-    html += '</div></div>';
+    html += '</div></div>' + moodTrend();
     if (n > 3) { html += '<input class="search" id="jsearch" type="search" placeholder="Search your journal" value="' + esc(ui.q) + '" autocapitalize="off" autocorrect="off">'; }
     return html + '<div id="jlist">' + journalList() + '</div>';
   }
@@ -977,6 +1042,7 @@
       break;
 
     /* journal */
+    case 'm-range': ui.moodRange = +act.getAttribute('data-r'); render(); break;
     case 'j-new': openJournal(null, +act.getAttribute('data-mood')); break;
     case 'j-edit': openJournal(id, 0); break;
     case 'j-mood':
