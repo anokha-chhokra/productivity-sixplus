@@ -15,8 +15,16 @@ It is plain HTML, CSS and JavaScript. There is no build step, no dependencies an
 - Entries are grouped by day, newest first. Tap an entry to edit or delete it.
 - Search your journal (appears once you have more than 3 entries).
 - Header shows your entry count and writing streak.
+- **Reminders** card below the expense summary (see below).
 - **Expense gist card** at the top: this month's spend, change vs last month, budget progress, today's spend, and the amount left (or your top category if no budget is set). Tap it to open Expenses, or tap **+ Add** to log an expense straight away.
 - The settings button (top right) opens currency, budget and backup options.
+
+### Home: reminders
+- Add a reminder with a title, a date (quick picks: Today, Tomorrow, Next week), an optional time, and a repeat (once, daily, weekly or monthly).
+- The card lists upcoming reminders soonest first. Overdue ones show in red, and the first four are shown with a "Show all" link for the rest.
+- Tap the circle to complete a reminder. A repeating reminder jumps to its next date instead of disappearing; monthly ones keep their day of the month (31st reminders land on the last day of shorter months). Completed one-off reminders move to a "Completed" list where you can undo them.
+- The Home tab shows a red badge counting reminders that are overdue or due today.
+- **In-app alerts only.** When a reminder with a time comes due while the app is open, a banner drops from the top with **Done** and **+10 min** (snooze, one-off reminders only). If the app was closed at the time, you'll see the banner when you next open it (reminders more than a day late just show as overdue). iPhone web apps cannot send notifications when closed, so this app can't wake your phone.
 
 ### Commit: habit tracker
 - **Today** view: tap the big circle to check off a commitment. The 14-day strip lets you log or correct earlier days.
@@ -81,6 +89,7 @@ Settings:
   "habits":   [{ "id": "", "name": "", "days": [0,1,2,3,4,5,6], "color": "#3fb950", "created": "YYYY-MM-DD", "log": { "YYYY-MM-DD": 1 } }],
   "journal":  [{ "id": "", "ts": 0, "date": "YYYY-MM-DD", "mood": 0, "text": "" }],
   "expenses": [{ "id": "", "ts": 0, "date": "YYYY-MM-DD", "amount": 0, "cat": "food", "note": "" }],
+  "reminders": [{ "id": "", "title": "", "date": "YYYY-MM-DD", "time": "HH:MM or empty", "repeat": "none|daily|weekly|monthly", "anchor": 1, "done": false, "alerted": "" }],
   "settings": { "currency": "$", "budget": 0, "theme": "dark" }
 }
 ```
@@ -100,4 +109,4 @@ It also works in current desktop and mobile browsers. For a phone-sized view on 
 
 ## Ideas for later
 
-Reminders, recurring expenses, income and balance tracking, per-commitment detail pages, and an "auto" theme that follows the system setting.
+Recurring expenses, income and balance tracking, per-commitment detail pages, and an "auto" theme that follows the system setting.

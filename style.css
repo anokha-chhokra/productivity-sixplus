@@ -347,12 +347,12 @@ svg.heat text { fill: var(--muted); font-size: 11px; font-family: -apple-system,
   -webkit-user-select: text; user-select: text;
 }
 .sheet textarea:focus { outline: 0; border-color: var(--accent); }
-.sheet input[type=number], .sheet input[type=date] {
+.sheet input[type=number], .sheet input[type=date], .sheet input[type=time] {
   width: 100%; height: 48px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--text);
   padding: 0 14px; font-size: 17px; -webkit-appearance: none; appearance: none; font-family: inherit;
   -webkit-user-select: text; user-select: text;
 }
-.sheet input[type=number]:focus, .sheet input[type=date]:focus { outline: 0; border-color: var(--accent); }
+.sheet input[type=number]:focus, .sheet input[type=date]:focus, .sheet input[type=time]:focus { outline: 0; border-color: var(--accent); }
 .sheet input.amt { height: 60px; font-size: 30px; font-weight: 700; }
 
 /* expenses */
@@ -380,4 +380,41 @@ svg.heat text { fill: var(--muted); font-size: 11px; font-family: -apple-system,
 .catbtn.on { border-color: var(--accent); }
 .catbtn.on span { color: var(--text); }
 .sheet .backup-box { margin-top: 10px; height: 90px; font-size: 14px; font-family: Menlo, Courier, monospace; }
+/* reminders */
+.rems { margin-top: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 14px 14px 8px; }
+.rems .g-top { margin-bottom: 4px; }
+.rem-empty { margin: 8px 0 6px; font-size: 14px; color: var(--muted); }
+.rrow { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; border-top: 1px solid var(--line); }
+.rems .g-top + .rrow, .rems .rem-empty + .rrow { border-top: 0; }
+.rcheck { -webkit-flex: 0 0 auto; flex: 0 0 auto; width: 26px; height: 26px; border-radius: 13px; border: 2px solid var(--muted); margin: 0 12px 0 2px; position: relative; }
+.rcheck:before { content: ""; position: absolute; top: -12px; right: -12px; bottom: -12px; left: -12px; } /* 50px tap area */
+.rcheck svg { display: block; margin: 2px auto 0; }
+.rrow.done .rcheck { background: var(--accent); border-color: var(--accent); }
+.rrow.done .rbody b { text-decoration: line-through; color: var(--muted); }
+.rrow.overdue .rcheck { border-color: var(--bad); }
+.rrow.today .rcheck { border-color: var(--accent); }
+.rbody { -webkit-flex: 1 1 auto; flex: 1 1 auto; min-width: 0; text-align: left; padding: 10px 0; }
+.rbody b { display: block; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rbody span { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+.rrow.overdue .rbody span { color: var(--bad); }
+.rlink { display: block; height: 40px; font-size: 14px; border-top: 1px solid var(--line); width: 100%; text-align: left; padding-left: 2px; }
+.badge { position: absolute; top: 3px; left: 50%; margin-left: 6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--bad); color: #fff; font-size: 10px; font-weight: 700; font-style: normal; line-height: 16px; text-align: center; }
+.tab { position: relative; }
+
+/* in-app reminder banner */
+.toast {
+  position: fixed; top: 10px; left: 10px; right: 10px; z-index: 40;
+  display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center;
+  background: var(--card); border: 1px solid var(--accent); border-radius: 16px; padding: 10px 10px 10px 14px;
+  -webkit-box-shadow: 0 6px 24px rgba(0,0,0,.35); box-shadow: 0 6px 24px rgba(0,0,0,.35);
+  -webkit-animation: drop .25s ease-out; animation: drop .25s ease-out;
+}
+@-webkit-keyframes drop { from { -webkit-transform: translateY(-120%); } to { -webkit-transform: none; } }
+@keyframes drop { from { transform: translateY(-120%); } to { transform: none; } }
+.t-main { -webkit-flex: 1 1 auto; flex: 1 1 auto; min-width: 0; }
+.t-main b { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.t-main span { font-size: 12px; color: var(--muted); }
+.t-btns { -webkit-flex: 0 0 auto; flex: 0 0 auto; display: -webkit-flex; display: flex; margin-left: 8px; }
+.t-btn { height: 40px; min-width: 40px; padding: 0 10px; margin-left: 6px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); font-size: 14px; font-weight: 600; }
+.t-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .sheet .note { font-size: 13px; color: var(--muted); margin: 6px 0 0; line-height: 1.4; }

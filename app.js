@@ -26,9 +26,9 @@
   ];
 
   var state = blankState();
-  var ui = { tab: 'home', sub: 'today', date: todayKey(), month: monthOf(todayKey()), edit: null, stripLeft: null, q: '' };
+  var ui = { tab: 'home', sub: 'today', date: todayKey(), month: monthOf(todayKey()), edit: null, stripLeft: null, q: '', allRem: false, showDone: false, toast: null, remSig: '' };
 
-  function blankState() { return { habits: [], journal: [], expenses: [], settings: { currency: '$', budget: 0, theme: 'dark' } }; }
+  function blankState() { return { habits: [], journal: [], expenses: [], reminders: [], settings: { currency: '$', budget: 0, theme: 'dark' } }; }
 
   /* ---------- dates (local YYYY-MM-DD) ---------- */
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
@@ -61,6 +61,7 @@
     if (data && data.habits instanceof Array) { s.habits = data.habits; }
     if (data && data.journal instanceof Array) { s.journal = data.journal; }
     if (data && data.expenses instanceof Array) { s.expenses = data.expenses; }
+    if (data && data.reminders instanceof Array) { s.reminders = data.reminders; }
     if (data && data.settings) {
       if (typeof data.settings.currency === 'string') { s.settings.currency = data.settings.currency; }
       if (typeof data.settings.budget === 'number') { s.settings.budget = data.settings.budget; }
@@ -368,6 +369,116 @@
   }
 
   /* ======================================================
+     REMINDERS (in-app only: iOS 12 web apps cannot push notifications)
+     ====================================================== */
+  var REPEATS = { none: 'Once', daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' };
+  var REPEAT_ORDER = ['none', 'daily', 'weekly', 'monthly'];
+  var CHECK_SMALL = CHECK_SVG.replace('width="26" height="26"', 'width="18" height="18"');
+
+  function time12(hm) {
+    var p = hm.split(':'), h = +p[0], ap = h >= 12 ? 'PM' : 'AM';
+    h = h % 12; if (h === 0) { h = 12; }
+    return h + ':' + p[1] + ' ' + ap;
+  }
+  function defaultTime() { return pad((new Date().getHours() + 1) % 24) + ':00'; }
+  function remDt(r) {
+    var p = r.date.split('-'), t = r.time ? r.time.split(':') : [23, 59];
+    return new Date(+p[0], +p[1] - 1, +p[2], +t[0], +t[1]).getTime();
+  }
+  function remStatus(r) {
+    var t = todayKey();
+    if (r.date < t) { return 'overdue'; }
+    if (r.date === t) { return (r.time && remDt(r) < Date.now()) ? 'overdue' : 'today'; }
+    return 'upcoming';
+  }
+  function remDateText(k) { return k === addDays(todayKey(), 1) ? 'Tomorrow' : dateHead(k); }
+  function activeRems() {
+    return state.reminders.filter(function (r) { return !r.done; }).sort(function (a, b) { return remDt(a) - remDt(b); });
+  }
+  function stepDate(d, r) {
+    if (r.repeat === 'daily') { return addDays(d, 1); }
+    if (r.repeat === 'weekly') { return addDays(d, 7); }
+    var p = d.split('-'), next = new Date(+p[0], +p[1], 1), last = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+    next.setDate(Math.min(r.anchor || +p[2], last));
+    return keyOf(next);
+  }
+  function completeReminder(r) {
+    if (r.repeat && r.repeat !== 'none') {
+      var t = todayKey(), d = r.date, guard = 0;
+      do { d = stepDate(d, r); guard++; } while (d <= t && guard < 800);
+      r.date = d; r.alerted = '';
+    } else {
+      r.done = true; r.doneAt = Date.now();
+    }
+    save();
+  }
+
+  function remRow(r, isDone) {
+    var s = isDone ? 'done' : remStatus(r), meta = [];
+    if (s === 'overdue') { meta.push('Overdue'); }
+    meta.push(remDateText(r.date));
+    if (r.time) { meta.push(time12(r.time)); }
+    if (r.repeat && r.repeat !== 'none') { meta.push('↻ ' + REPEATS[r.repeat]); }
+    return '<div class="rrow ' + s + '"><button class="rcheck" data-act="r-done" data-id="' + r.id + '" aria-label="' + (isDone ? 'Mark not done' : 'Complete') + '">' + (isDone ? CHECK_SMALL : '') + '</button>' +
+      '<button class="rbody" data-act="r-edit" data-id="' + r.id + '"><b>' + esc(r.title) + '</b><span>' + meta.join(' · ') + '</span></button></div>';
+  }
+
+  function remindersCard() {
+    var act = activeRems(), done = state.reminders.filter(function (r) { return r.done; }).sort(function (a, b) { return (b.doneAt || 0) - (a.doneAt || 0); }), i;
+    var html = '<div class="rems"><div class="g-top"><span class="eyebrow">Reminders</span><button class="g-quick" data-act="r-add">+ Add</button></div>';
+    if (!act.length) { html += '<p class="rem-empty">Nothing to remember. Tap + Add to set a reminder.</p>'; }
+    var shown = ui.allRem ? act : act.slice(0, 4);
+    for (i = 0; i < shown.length; i++) { html += remRow(shown[i], false); }
+    if (act.length > 4) { html += '<button class="link rlink" data-act="r-more">' + (ui.allRem ? 'Show less' : 'Show all ' + act.length) + '</button>'; }
+    if (done.length) {
+      html += '<button class="link dim rlink" data-act="r-showdone">' + (ui.showDone ? 'Hide completed' : 'Completed (' + done.length + ')') + '</button>';
+      if (ui.showDone) { for (i = 0; i < Math.min(done.length, 10); i++) { html += remRow(done[i], true); } }
+    }
+    return html + '</div>';
+  }
+
+  function updateBadge() {
+    var n = 0, list = activeRems(), i, b = el('home-badge');
+    for (i = 0; i < list.length; i++) { if (remStatus(list[i]) !== 'upcoming') { n++; } }
+    if (b) { b.textContent = n > 9 ? '9+' : n; b.style.display = n ? 'block' : 'none'; }
+  }
+
+  function showToast(r) {
+    ui.toast = r.id;
+    var repeating = r.repeat && r.repeat !== 'none';
+    el('toast-root').innerHTML = '<div class="toast"><div class="t-main"><b>⏰ ' + esc(r.title) + '</b><span>Due now · ' + time12(r.time) + '</span></div>' +
+      '<div class="t-btns"><button class="t-btn primary" data-act="t-done">Done</button>' + (repeating ? '' : '<button class="t-btn" data-act="t-snooze">+10 min</button>') +
+      '<button class="t-btn" data-act="t-close" aria-label="Dismiss">✕</button></div></div>';
+  }
+  function hideToast() {
+    ui.toast = null; el('toast-root').innerHTML = '';
+    window.setTimeout(checkDue, 300);
+  }
+  // pop up a banner for timed reminders that have come due and haven't been announced yet
+  function checkDue() {
+    if (ui.toast) { return; }
+    var now = Date.now(), list = [], changed = false, i, r, key;
+    for (i = 0; i < state.reminders.length; i++) {
+      r = state.reminders[i]; key = r.date + ' ' + r.time;
+      if (r.done || !r.time || r.alerted === key || remDt(r) > now) { continue; }
+      if (now - remDt(r) > 864e5) { r.alerted = key; changed = true; continue; } // stale: show in list only
+      list.push(r);
+    }
+    if (changed) { save(); }
+    if (!list.length) { return; }
+    list.sort(function (a, b) { return remDt(a) - remDt(b); });
+    list[0].alerted = list[0].date + ' ' + list[0].time;
+    save();
+    showToast(list[0]);
+  }
+  function tick() {
+    checkDue();
+    var sig = activeRems().map(function (r) { return r.id + remStatus(r); }).join(',');
+    var a = document.activeElement, typing = a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA');
+    if (sig !== ui.remSig && ui.tab === 'home' && !ui.edit && !typing) { render(); } else { updateBadge(); }
+  }
+
+  /* ======================================================
      JOURNAL (home)
      ====================================================== */
   function journalStreak() {
@@ -426,7 +537,7 @@
     var html = '<div class="top"><div><div class="eyebrow">' + DAY_LONG[now.getDay()] + ', ' + MONTHS[now.getMonth()] + ' ' + now.getDate() + '</div><h1>Journal</h1>' +
       '<div class="sub">' + n + (n === 1 ? ' entry' : ' entries') + (st > 0 ? ' · 🔥 ' + st + ' day streak' : '') + '</div></div>' +
       '<button class="icon-btn" data-act="settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 7h10M18 7h2M4 17h2M10 17h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="16" cy="7" r="2.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="8" cy="17" r="2.2" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></div>';
-    html += gistCard();
+    html += gistCard() + remindersCard();
     html += '<div class="compose"><button class="ask" data-act="j-new" data-mood="0">What’s on your mind?</button><div class="moodrow">';
     for (i = 0; i < MOODS.length; i++) { html += '<button class="mood-btn" data-act="j-new" data-mood="' + (i + 1) + '" aria-label="Mood ' + (i + 1) + '">' + MOODS[i] + '</button>'; }
     html += '</div></div>';
@@ -490,6 +601,42 @@
     if (!x) { el('x-amt').focus(); }
   }
 
+  function openReminder(id) {
+    var r = id ? byId(state.reminders, id) : null, i, html;
+    var hasTime = !!(r && r.time);
+    ui.edit = { type: 'reminder', id: id || null, repeat: (r && r.repeat) || 'none', hasTime: hasTime };
+    html = '<div class="scrim" data-act="close"></div><div class="sheet full">' + head(r ? 'Edit reminder' : 'New reminder', 'r-save') +
+      '<label>Remind me to</label><input type="text" id="r-title" maxlength="80" value="' + esc(r ? r.title : '') + '" placeholder="e.g. Call the bank" autocapitalize="sentences" autocorrect="off">' +
+      '<label>Date</label><div class="presets" style="margin:0 0 8px"><button data-act="r-quick" data-d="0">Today</button><button data-act="r-quick" data-d="1">Tomorrow</button><button data-act="r-quick" data-d="7">Next week</button></div>' +
+      '<input type="date" id="r-date" value="' + (r ? r.date : todayKey()) + '">' +
+      '<label>Time</label><div id="r-timewrap" style="display:' + (hasTime ? 'block' : 'none') + '"><input type="time" id="r-time" value="' + (hasTime ? r.time : defaultTime()) + '">' +
+      '<button class="link dim" style="margin-top:4px" data-act="r-time" data-on="0">Remove time</button></div>' +
+      '<button class="btn" id="r-addtime" style="display:' + (hasTime ? 'none' : 'block') + ';width:100%;margin-right:0" data-act="r-time" data-on="1">Add a time</button>' +
+      '<label>Repeat</label><div class="seg" style="margin-bottom:0">';
+    for (i = 0; i < REPEAT_ORDER.length; i++) {
+      html += '<button data-act="r-rep" data-rep="' + REPEAT_ORDER[i] + '" class="' + (ui.edit.repeat === REPEAT_ORDER[i] ? 'on' : '') + '">' + REPEATS[REPEAT_ORDER[i]] + '</button>';
+    }
+    html += '</div>' + (r ? '<div class="btnrow" style="margin-top:20px"><button class="btn danger" data-act="r-delete">Delete reminder</button></div>' : '') +
+      '<p class="note">Reminders alert you while the app is open. iPhone web apps can’t send notifications when closed.</p></div>';
+    showSheet(html);
+    if (!r) { el('r-title').focus(); }
+  }
+
+  function saveReminder(e) {
+    var title = el('r-title').value.replace(/^\s+|\s+$/g, '');
+    if (!title) { el('r-title').focus(); return false; }
+    var date = el('r-date').value || todayKey(), time = e.hasTime ? (el('r-time').value || defaultTime()) : '';
+    var r = e.id ? byId(state.reminders, e.id) : null, anchor = +date.split('-')[2];
+    if (r) {
+      if (r.date !== date || r.time !== time) { r.alerted = ''; }
+      r.title = title; r.date = date; r.time = time; r.repeat = e.repeat; r.anchor = anchor;
+    } else {
+      state.reminders.push({ id: newId('r'), title: title, date: date, time: time, repeat: e.repeat, anchor: anchor, done: false, alerted: '' });
+    }
+    save();
+    return true;
+  }
+
   function openSettings() {
     ui.edit = { type: 'settings' };
     showSheet('<div class="scrim" data-act="close"></div><div class="sheet full">' + head('Settings', 's-save') +
@@ -518,6 +665,8 @@
     strip = el('strip');
     if (strip) { strip.scrollLeft = ui.stripLeft === null ? strip.scrollWidth : ui.stripLeft; }
     app.scrollTop = top;
+    ui.remSig = activeRems().map(function (r) { return r.id + remStatus(r); }).join(',');
+    updateBadge();
   }
 
   /* ======================================================
@@ -638,6 +787,48 @@
       if (nm <= monthOf(todayKey())) { ui.month = nm; render(); }
       break;
 
+    /* reminders */
+    case 'r-add': openReminder(null); break;
+    case 'r-edit': openReminder(id); break;
+    case 'r-done':
+      x = byId(state.reminders, id);
+      if (x) { if (x.done) { x.done = false; x.doneAt = 0; save(); } else { completeReminder(x); } render(); }
+      break;
+    case 'r-more': ui.allRem = !ui.allRem; render(); break;
+    case 'r-showdone': ui.showDone = !ui.showDone; render(); break;
+    case 'r-quick': el('r-date').value = addDays(todayKey(), +act.getAttribute('data-d')); break;
+    case 'r-time':
+      e.hasTime = act.getAttribute('data-on') === '1';
+      el('r-timewrap').style.display = e.hasTime ? 'block' : 'none';
+      el('r-addtime').style.display = e.hasTime ? 'none' : 'block';
+      break;
+    case 'r-rep':
+      e.repeat = act.getAttribute('data-rep');
+      var rb = document.querySelectorAll('.seg [data-act=r-rep]');
+      for (i = 0; i < rb.length; i++) { rb[i].className = rb[i].getAttribute('data-rep') === e.repeat ? 'on' : ''; }
+      break;
+    case 'r-save': if (saveReminder(e)) { closeSheet(); render(); } break;
+    case 'r-delete':
+      if (window.confirm('Delete this reminder?')) {
+        state.reminders = state.reminders.filter(function (z) { return z.id !== e.id; });
+        save(); closeSheet(); render();
+      }
+      break;
+    case 't-done':
+      x = byId(state.reminders, ui.toast);
+      if (x) { completeReminder(x); }
+      hideToast(); render();
+      break;
+    case 't-snooze':
+      x = byId(state.reminders, ui.toast);
+      if (x) {
+        var sn = new Date(Date.now() + 600000);
+        x.date = keyOf(sn); x.time = pad(sn.getHours()) + ':' + pad(sn.getMinutes()); x.alerted = ''; save();
+      }
+      hideToast(); render();
+      break;
+    case 't-close': hideToast(); break;
+
     /* settings */
     case 's-save':
       var cur = el('s-cur').value.replace(/^\s+|\s+$/g, '');
@@ -687,9 +878,12 @@
       if (ui.month > monthOf(t)) { ui.month = monthOf(t); }
       render();
     }
+    if (!document.hidden) { checkDue(); }
   }, false);
 
   load();
   applyTheme();
   render();
+  checkDue();
+  window.setInterval(tick, 30000);
 })();

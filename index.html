@@ -25,6 +25,7 @@ try {
   <button class="tab" data-act="tab" data-tab="home">
     <svg viewBox="0 0 24 24" width="24" height="24"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
     <span>Home</span>
+    <i class="badge" id="home-badge" style="display:none"></i>
   </button>
   <button class="tab" data-act="tab" data-tab="commit">
     <svg viewBox="0 0 24 24" width="24" height="24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7.5 12.5l3 3 6-6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -37,6 +38,7 @@ try {
 </nav>
 
 <div id="sheet-root"></div>
+<div id="toast-root"></div>
 <script src="app.js"></script>
 </body>
 </html>
