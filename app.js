@@ -143,6 +143,33 @@
   function cat(id) { return byId(CATS, id) || CATS[CATS.length - 1]; }
   function el(id) { return document.getElementById(id); }
 
+  /* ---------- times ----------
+     Times are optional "HH:MM" strings. Data saved before times existed simply has none, and everything
+     that reads a time treats "missing" as "no time", so old backups load exactly as they always did. */
+  function nowHM() { var d = new Date(); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  function hmOf(ts) { var d = new Date(ts); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  function localMs(k, hm) {
+    var p = k.split('-'), t = (hm || '12:00').split(':');
+    return new Date(+p[0], +p[1] - 1, +p[2], +t[0], +t[1]).getTime();
+  }
+  // an optional time input with Add / Remove buttons; the prefix keeps ids unique per sheet
+  function timeField(prefix, hm, on) {
+    return '<div id="' + prefix + '-timewrap" style="display:' + (on ? 'block' : 'none') + '"><input type="time" id="' + prefix + '-time" value="' + (hm || '') + '">' +
+      '<button class="link dim" style="margin-top:4px" data-act="tm-off" data-p="' + prefix + '">Remove time</button></div>' +
+      '<button class="btn" id="' + prefix + '-addtime" style="display:' + (on ? 'none' : 'block') + ';width:100%;margin-right:0" data-act="tm-on" data-p="' + prefix + '">Add a time</button>';
+  }
+  function readTime(prefix) {
+    var w = el(prefix + '-timewrap');
+    return (w && w.style.display !== 'none') ? (el(prefix + '-time').value || nowHM()) : '';
+  }
+  // when a transaction happened, for ordering within a day: its time if it has one, otherwise the moment it was
+  // logged (if that was the same day), otherwise midday
+  function txStamp(t) {
+    if (t.time) { return localMs(t.date, t.time); }
+    if (t.ts && keyOf(new Date(t.ts)) === t.date) { return t.ts; }
+    return localMs(t.date, '12:00');
+  }
+
   /* ======================================================
      HABITS
      ====================================================== */
@@ -252,8 +279,9 @@
   function viewHabitsToday() {
     var t = todayKey(), k = ui.date, i, h, html = '';
     var head = habitTitle(k);
-    html += '<div class="top"><div><div class="eyebrow">' + head.eyebrow + '</div><h1>' + head.title + '</h1></div>' +
-      '<button class="add-btn" data-act="h-add" aria-label="Add commitment">+</button></div>';
+    html += '<div class="top"><div><div class="eyebrow">' + head.eyebrow + '</div><h1>' + head.title + '</h1></div><div class="hbtns">' +
+      '<button class="icon-btn" data-act="goto" aria-label="Go to a date"><svg viewBox="0 0 24 24" width="22" height="22"><rect x="3.5" y="5" width="17" height="15" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3.5 10h17M8 3v4M16 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button>' +
+      '<button class="add-btn" data-act="h-add" aria-label="Add commitment">+</button></div></div>';
 
     if (!state.habits.length) {
       html += '<div class="empty"><h2>Make your first commitment</h2>' +
@@ -264,8 +292,10 @@
       return html + '</div></div>';
     }
 
+    // the strip normally shows two weeks; if you jumped to an earlier date it stretches back to include it
+    var span = Math.round((parse(t) - parse(k)) / 864e5), nDays = Math.min(Math.max(14, span + 1), 366);
     html += '<div class="strip" id="strip">';
-    for (i = 13; i >= 0; i--) {
+    for (i = nDays - 1; i >= 0; i--) {
       var dk = addDays(t, -i), c = dayCounts(dk, ui.tag);
       html += '<button class="day' + (dk === k ? ' sel' : '') + (c.s && c.d === c.s ? ' full' : '') +
         '" data-act="pick" data-date="' + dk + '"><span class="dw">' + DAY_SHORT[dow(dk)] + '</span><span class="dn">' +
@@ -274,17 +304,22 @@
     html += '</div>' + tagStrip();
 
     var cnt = dayCounts(k, ui.tag), hidden = 0, cards = '', list = habitsFor(ui.tag);
+    // commitments with a time of day come first, earliest first; the rest keep their original order
+    list.sort(function (a, b) {
+      var ta = a.time || '99:99', tb = b.time || '99:99';
+      return ta < tb ? -1 : ta > tb ? 1 : state.habits.indexOf(a) - state.habits.indexOf(b);
+    });
     for (i = 0; i < list.length; i++) {
       h = list[i];
       if (k < h.created) { continue; }
       var on = isDone(h, k), sch = scheduled(h, k);
       if (!sch && !on) { hidden++; continue; }
-      var st = streak(h);
-      var meta = st > 0 ? '🔥 ' + st + ' day streak' : 'No streak yet';
+      var st = streak(h), doneAt = (on && typeof h.log[k] === 'string') ? h.log[k] : '';
+      var meta = (doneAt ? 'Done ' + time12(doneAt) + ' · ' : '') + (st > 0 ? '🔥 ' + st + ' day streak' : 'No streak yet');
       cards += '<div class="card' + (on ? ' is-done' : '') + (sch ? '' : ' rest') + '">' +
         '<button class="check' + (on ? ' on' : '') + '" style="border-color:' + h.color + ';background:' + (on ? h.color : 'transparent') +
         '" data-act="toggle" data-id="' + h.id + '" aria-label="Toggle ' + esc(h.name) + '">' + CHECK_SVG + '</button>' +
-        '<div class="info"><div class="name">' + esc(h.name) + '</div><div class="meta">' + meta + ' · ' + scheduleText(h) + '</div>' + tagPills(h) + '</div>' +
+        '<div class="info" data-act="h-checkin" data-id="' + h.id + '"><div class="name">' + esc(h.name) + '</div><div class="meta">' + meta + ' · ' + scheduleText(h) + (h.time ? ' at ' + time12(h.time) : '') + '</div>' + tagPills(h) + '</div>' +
         '<button class="more" data-act="h-edit" data-id="' + h.id + '" aria-label="Edit">•••</button></div>';
     }
     var pct = cnt.s ? Math.round(cnt.d * 100 / cnt.s) : 0;
@@ -498,7 +533,7 @@
       e = state.expenses[i];
       if (monthOf(e.date) === ym && (f === 'all' || e.acct === f)) { list.push(e); }
     }
-    list.sort(function (a, b) { return a.date === b.date ? b.ts - a.ts : (a.date < b.date ? 1 : -1); });
+    list.sort(function (a, b) { return a.date === b.date ? txStamp(b) - txStamp(a) : (a.date < b.date ? 1 : -1); });
     if (!list.length) {
       return html + '<div class="empty"><h2>No transactions this month</h2><p>Tap + to log income or spending. Your balance shows up on the Home tab.</p></div>';
     }
@@ -512,7 +547,7 @@
       }
       var isInc = e.type === 'income', c = isInc ? incCat(e.cat) : cat(e.cat), a = acctOf(e.acct);
       html += '<button class="xrow" data-act="x-edit" data-id="' + e.id + '"><span class="bubble" style="background:' + rgba(c.color, 0.18) + '">' + c.icon +
-        '</span><span class="nm"><b>' + esc(e.note || c.name) + '</b><span>' + (e.note ? c.name + ' · ' : '') + esc(a.name) + '</span></span>' +
+        '</span><span class="nm"><b>' + esc(e.note || c.name) + '</b><span>' + (e.note ? c.name + ' · ' : '') + esc(a.name) + (e.time ? ' · ' + time12(e.time) : '') + '</span></span>' +
         '<span class="am' + (isInc ? ' pos' : '') + '">' + (isInc ? '+' : '') + fmt(e.amount) + '</span></button>';
     }
     return html;
@@ -772,8 +807,8 @@
      ====================================================== */
   function showSheet(html) { el('sheet-root').innerHTML = html; }
   function closeSheet() { ui.edit = null; el('sheet-root').innerHTML = ''; }
-  function head(title, saveAct) {
-    return '<div class="shead"><button class="link dim" data-act="close">Cancel</button><b>' + title + '</b><button class="link strong" data-act="' + saveAct + '">Save</button></div>';
+  function head(title, saveAct, label) {
+    return '<div class="shead"><button class="link dim" data-act="close">Cancel</button><b>' + title + '</b><button class="link strong" data-act="' + saveAct + '">' + (label || 'Save') + '</button></div>';
   }
 
   // every tag the user could pick: tags already in use, ones added in this sheet, or starter suggestions
@@ -817,6 +852,9 @@
       '<label>Name</label><input type="text" id="f-name" maxlength="40" value="' + esc(h ? h.name : '') + '" placeholder="e.g. Read 20 minutes" autocapitalize="sentences" autocorrect="off">' +
       '<label>Tags</label><div class="tagchips" id="h-tags">' + tagChips(e) + '</div>' +
       '<div class="taginput"><input type="text" id="h-tag" maxlength="20" placeholder="New tag, e.g. Health" autocapitalize="words" autocorrect="off"><button class="btn" data-act="h-tagadd">Add</button></div>' +
+      '<label>Time of day (optional)</label>' + timeField('h', h && h.time ? h.time : defaultTime(), !!(h && h.time)) +
+      '<label>Started on</label><input type="date" id="h-start" max="' + todayKey() + '" value="' + (h ? h.created : todayKey()) + '">' +
+      '<p class="note">Choose an earlier date to log check-ins from before you started using the app.</p>' +
       '<label>Repeat on</label><div class="chips">';
     for (i = 0; i < DAY_ORDER.length; i++) {
       var d = DAY_ORDER[i];
@@ -831,12 +869,34 @@
     showSheet(html);
   }
 
+  // sheet for checking a commitment in on the selected day with a specific time (or moving it to another day)
+  function openCheckin(id) {
+    var h = byId(state.habits, id), k = ui.date, cur = h.log[k], isToday = k === todayKey();
+    var hasTime = typeof cur === 'string' ? true : (!cur && isToday);
+    var tm = typeof cur === 'string' ? cur : (isToday ? nowHM() : (h.time || '09:00'));
+    ui.edit = { type: 'checkin', id: id, orig: k, was: !!cur };
+    showSheet('<div class="scrim" data-act="close"></div><div class="sheet full">' + head(esc(h.name), 'c-save') +
+      '<label>Date</label><input type="date" id="c-date" max="' + todayKey() + '" value="' + k + '">' +
+      '<label>Time</label>' + timeField('c', tm, hasTime) +
+      '<p class="note">Saving marks this commitment as done on that day. You can pick an earlier date to log something you forgot.</p>' +
+      (cur ? '<div class="btnrow" style="margin-top:20px"><button class="btn danger" data-act="c-remove">Remove check-in</button></div>' : '') + '</div>');
+  }
+
+  function openGoto() {
+    ui.edit = { type: 'goto' };
+    showSheet('<div class="scrim" data-act="close"></div><div class="sheet">' + head('Go to a date', 'g-go', 'Go') +
+      '<label>Date</label><input type="date" id="g-date" max="' + todayKey() + '" value="' + ui.date + '">' +
+      '<div class="presets"><button data-act="g-today">Back to today</button></div></div>');
+  }
+
   function openJournal(id, mood) {
     var j = id ? byId(state.journal, id) : null, i, html;
-    ui.edit = { type: 'journal', id: id || null, mood: j ? j.mood || 0 : mood || 0 };
+    var jd = j ? j.date : todayKey(), jt = j ? hmOf(j.ts) : nowHM();
+    ui.edit = { type: 'journal', id: id || null, mood: j ? j.mood || 0 : mood || 0, date0: jd, time0: jt };
     html = '<div class="scrim" data-act="close"></div><div class="sheet full">' + head(j ? dateHead(j.date) : 'New entry', 'j-save') + '<div class="moods">';
     for (i = 0; i < MOODS.length; i++) { html += '<button data-act="j-mood" data-mood="' + (i + 1) + '" class="' + (ui.edit.mood === i + 1 ? 'on' : '') + '">' + MOODS[i] + '</button>'; }
-    html += '</div><textarea id="j-text" placeholder="Write freely…">' + esc(j ? j.text : '') + '</textarea>' +
+    html += '</div><div class="dtrow"><input type="date" id="j-date" max="' + todayKey() + '" value="' + jd + '"><input type="time" id="j-time" value="' + jt + '"></div>' +
+      '<textarea id="j-text" placeholder="Write freely…">' + esc(j ? j.text : '') + '</textarea>' +
       (j ? '<div class="btnrow" style="margin-top:16px"><button class="btn danger" data-act="j-delete">Delete entry</button></div>' : '') + '</div>';
     showSheet(html);
     if (!j) { el('j-text').focus(); }
@@ -865,7 +925,8 @@
     }
     html += '</div><label>Category</label><div class="catgrid" id="x-cats">' + catGrid(kind, ui.edit.cat) + '</div>' +
       '<label>Note</label><input type="text" id="x-note" maxlength="60" placeholder="Optional" value="' + esc(x ? x.note : '') + '" autocapitalize="sentences" autocorrect="off">' +
-      '<label>Date</label><input type="date" id="x-date" value="' + (x ? x.date : todayKey()) + '">' +
+      '<label>Date and time</label><div class="dtrow"><input type="date" id="x-date" value="' + (x ? x.date : todayKey()) + '"><input type="time" id="x-time" value="' + (x ? (x.time || '') : nowHM()) + '"></div>' +
+      '<p class="note">Pick an earlier date or time to log something from the past.</p>' +
       (x ? '<div class="btnrow" style="margin-top:20px"><button class="btn danger" data-act="x-delete">Delete transaction</button></div>' : '') + '</div>';
     showSheet(html);
     if (!x) { el('x-amt').focus(); }
@@ -992,7 +1053,15 @@
     var tabs = document.querySelectorAll('.tab'), i;
     for (i = 0; i < tabs.length; i++) { tabs[i].className = 'tab' + (tabs[i].getAttribute('data-tab') === ui.tab ? ' on' : ''); }
     strip = el('strip');
-    if (strip) { strip.scrollLeft = ui.stripLeft === null ? strip.scrollWidth : ui.stripLeft; }
+    if (strip) {
+      strip.scrollLeft = ui.stripLeft === null ? strip.scrollWidth : ui.stripLeft;
+      var selDay = ui.stripSel && strip.querySelector('.day.sel');
+      if (selDay) { // after "Go to a date", bring the chosen day into view
+        strip.scrollLeft = selDay.getBoundingClientRect().left - strip.getBoundingClientRect().left + strip.scrollLeft - (strip.clientWidth - selDay.offsetWidth) / 2;
+        ui.stripLeft = strip.scrollLeft;
+      }
+      ui.stripSel = false;
+    }
     app.scrollTop = top;
     ui.remSig = activeRems().map(function (r) { return r.id + remStatus(r); }).join(',');
     updateBadge();
@@ -1121,7 +1190,40 @@
     case 'pick': ui.date = act.getAttribute('data-date'); render(); break;
     case 'toggle':
       h = byId(state.habits, id);
-      if (h) { if (isDone(h, ui.date)) { delete h.log[ui.date]; } else { h.log[ui.date] = 1; } save(); render(); }
+      // checking off today records the time; for an earlier day there is no honest time to record, so it stays untimed
+      if (h) { if (isDone(h, ui.date)) { delete h.log[ui.date]; } else { h.log[ui.date] = ui.date === todayKey() ? nowHM() : 1; } save(); render(); }
+      break;
+    case 'h-checkin': openCheckin(id); break;
+    case 'c-save':
+      h = byId(state.habits, e.id);
+      var cdate = el('c-date').value || e.orig, ctime = readTime('c');
+      if (cdate > todayKey() || (cdate === todayKey() && ctime && ctime > nowHM())) { window.alert('That date and time is in the future.'); break; }
+      if (cdate < h.created) { window.alert('This commitment started on ' + dateHead(h.created) + '. Change "Started on" in its settings to log earlier days.'); break; }
+      if (e.was && cdate !== e.orig) { delete h.log[e.orig]; }
+      h.log[cdate] = ctime || 1;
+      ui.date = cdate;
+      save(); closeSheet(); render();
+      break;
+    case 'c-remove':
+      h = byId(state.habits, e.id);
+      if (h) { delete h.log[e.orig]; save(); }
+      closeSheet(); render();
+      break;
+    case 'goto': openGoto(); break;
+    case 'g-go':
+      var gd = el('g-date').value || todayKey();
+      ui.date = gd > todayKey() ? todayKey() : gd; ui.stripSel = true;
+      closeSheet(); render();
+      break;
+    case 'g-today': ui.date = todayKey(); ui.stripLeft = null; closeSheet(); render(); break;
+    case 'tm-on':
+      var tp = act.getAttribute('data-p');
+      if (!el(tp + '-time').value) { el(tp + '-time').value = nowHM(); }
+      el(tp + '-timewrap').style.display = 'block'; el(tp + '-addtime').style.display = 'none';
+      break;
+    case 'tm-off':
+      var tq = act.getAttribute('data-p');
+      el(tq + '-timewrap').style.display = 'none'; el(tq + '-addtime').style.display = 'block';
       break;
     case 'h-add': openHabit(null); break;
     case 'h-edit': openHabit(id); break;
@@ -1152,8 +1254,12 @@
       if (!name) { el('f-name').focus(); break; }
       if (!e.days.length) { window.alert('Pick at least one day.'); break; }
       addTagFromInput(e); // include a tag that was typed but not yet added
-      if (e.id) { h = byId(state.habits, e.id); h.name = name; h.days = e.days.slice(); h.color = e.color; h.tags = e.tags.slice(); }
-      else { addHabit(name, e.days.slice(), e.color, e.tags.slice()); }
+      var htime = readTime('h'), hstart = el('h-start').value || todayKey();
+      if (hstart > todayKey()) { hstart = todayKey(); }
+      if (e.id) {
+        h = byId(state.habits, e.id); h.name = name; h.days = e.days.slice(); h.color = e.color; h.tags = e.tags.slice(); h.created = hstart;
+        if (htime) { h.time = htime; } else { delete h.time; }
+      } else { addHabit(name, e.days.slice(), e.color, e.tags.slice(), htime, hstart); }
       save(); closeSheet(); render();
       break;
     case 'h-delete':
@@ -1175,8 +1281,15 @@
     case 'j-save':
       var text = el('j-text').value.replace(/^\s+|\s+$/g, '');
       if (!text) { el('j-text').focus(); break; }
-      if (e.id) { x = byId(state.journal, e.id); x.text = text; x.mood = e.mood; }
-      else { state.journal.push({ id: newId('j'), ts: Date.now(), date: todayKey(), mood: e.mood, text: text }); }
+      var jdate = el('j-date').value || e.date0, jtime = el('j-time').value || e.time0, jts = localMs(jdate, jtime);
+      if (jts > Date.now() + 60000) { window.alert('That date and time is in the future.'); break; }
+      var jmoved = jdate !== e.date0 || jtime !== e.time0;
+      if (e.id) {
+        x = byId(state.journal, e.id); x.text = text; x.mood = e.mood;
+        if (jmoved) { x.date = jdate; x.ts = jts; } // only touch the timestamp if the user changed it
+      } else {
+        state.journal.push({ id: newId('j'), ts: jmoved ? jts : Date.now(), date: jdate, mood: e.mood, text: text });
+      }
       save(); closeSheet(); render();
       break;
     case 'j-delete':
@@ -1209,8 +1322,15 @@
       var amt = Math.round(num('x-amt') * 100) / 100;
       if (amt <= 0) { el('x-amt').focus(); break; }
       var note = el('x-note').value.replace(/^\s+|\s+$/g, ''), date = el('x-date').value || todayKey();
-      if (e.id) { x = byId(state.expenses, e.id); x.amount = amt; x.cat = e.cat; x.note = note; x.date = date; x.type = e.kind; x.acct = e.acct; }
-      else { state.expenses.push({ id: newId('x'), ts: Date.now(), date: date, amount: amt, cat: e.cat, note: note, type: e.kind, acct: e.acct }); }
+      var xtime = el('x-time').value;
+      if (e.id) {
+        x = byId(state.expenses, e.id); x.amount = amt; x.cat = e.cat; x.note = note; x.date = date; x.type = e.kind; x.acct = e.acct;
+        if (xtime) { x.time = xtime; x.ts = localMs(date, xtime); } else { delete x.time; }
+      } else {
+        x = { id: newId('x'), ts: xtime ? localMs(date, xtime) : Date.now(), date: date, amount: amt, cat: e.cat, note: note, type: e.kind, acct: e.acct };
+        if (xtime) { x.time = xtime; }
+        state.expenses.push(x);
+      }
       ui.lastAcct = e.acct;
       if (monthOf(date) !== ui.month && ui.tab === 'spend') { ui.month = monthOf(date); }
       save(); closeSheet(); render();
@@ -1359,8 +1479,10 @@
     }
   }
 
-  function addHabit(name, days, color, tags) {
-    state.habits.push({ id: newId('h'), name: name, days: days, color: color, tags: tags || [], created: todayKey(), log: {} });
+  function addHabit(name, days, color, tags, time, created) {
+    var h = { id: newId('h'), name: name, days: days, color: color, tags: tags || [], created: created || todayKey(), log: {} };
+    if (time) { h.time = time; }
+    state.habits.push(h);
   }
 
   // Enter in the tag box adds the tag instead of doing nothing

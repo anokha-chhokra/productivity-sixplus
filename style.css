@@ -509,4 +509,12 @@ svg.heat text { fill: var(--muted); font-size: 11px; font-family: -apple-system,
 .sx { -webkit-flex: 0 0 40px; flex: 0 0 40px; height: 44px; color: var(--muted); font-size: 16px; }
 .sfoot { -webkit-flex: 0 0 auto; flex: 0 0 auto; position: -webkit-sticky; position: sticky; bottom: 0; display: -webkit-flex; display: flex; padding: 12px 20px 16px; background: var(--bg); border-top: 1px solid var(--line); }
 .sfoot .btn { height: 50px; }
+/* date + time inputs side by side, header buttons */
+.dtrow { display: -webkit-flex; display: flex; margin-bottom: 10px; }
+.dtrow input[type=date] { -webkit-flex: 1 1 auto; flex: 1 1 auto; min-width: 0; width: auto; }
+.dtrow input[type=time] { -webkit-flex: 0 0 124px; flex: 0 0 124px; width: 124px; margin-left: 8px; }
+.sheet .dtrow + textarea { margin-top: 0; }
+.hbtns { display: -webkit-flex; display: flex; -webkit-align-items: center; align-items: center; }
+.hbtns .icon-btn { margin-right: 8px; }
+.info[data-act] { cursor: pointer; }
 .sheet .note { font-size: 13px; color: var(--muted); margin: 6px 0 0; line-height: 1.4; }
